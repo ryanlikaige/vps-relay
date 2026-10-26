@@ -2,13 +2,14 @@
 
 A 机（CN2 线路）专用的 sing-box 一键安装脚本和网页管理面板。
 
-A 机提供三个节点：
+A 机提供四个节点：
 
 | 节点 | 协议 | 出口 |
 | --- | --- | --- |
 | 节点 1 | Hysteria2 (UDP) | 全部从 A 直连 |
 | 节点 2 | VLESS Reality (TCP) | 全部从 A 直连 |
 | 节点 3 | VLESS Reality (TCP) | **智能分流**：列表里的网站（默认是 Gemini）转到 B 机出口，其余从 A 直连 |
+| 节点 4 | Hysteria2 (UDP) | **智能分流**，规则同节点 3 |
 
 ```
 客户端 ──CN2──> A ──┬─ 普通网站 ──> 直接访问
@@ -28,22 +29,22 @@ bash <(curl -fsSL https://raw.githubusercontent.com/ryanlikaige/vps-relay/main/i
 安装完成后会打印：
 
 - 面板地址（`https://IP:端口/随机路径/`）和初始密码
-- 三个节点的分享链接
+- 四个节点的分享链接
 
 然后：
 
 1. 打开面板，在"B 机出口"里粘贴 B 机的任意一个节点分享链接（推荐 vless reality，在 B 机上运行 `sb` 查看节点信息即可拿到），保存。
-2. 把三个节点的链接或二维码导入 v2rayN、小火箭、HomeProxy。
+2. 把四个节点的链接或二维码导入 v2rayN、小火箭、HomeProxy。
 3. 在面板的"出口测试"里点"强制走 B"，确认出口 IP 是 B 机的。
 4. 客户端选"智能分流"节点，打开 Gemini 实测。
 
-如果服务商有安全组/防火墙，需要放行：面板端口(TCP)、节点 2 和节点 3 的端口(TCP)、节点 1 的端口(UDP)。脚本会自动放行 ufw/firewalld。
+如果服务商有安全组/防火墙，需要放行：面板端口(TCP)、节点 2 和节点 3 的端口(TCP)、节点 1 和节点 4 的端口(UDP)、80 端口(TCP，配域名时申请证书用)。脚本会自动放行 ufw/firewalld。
 
 可选环境变量（安装前设置）：
 
 | 变量 | 默认 | 说明 |
 | --- | --- | --- |
-| `VLESS_PORT` `SMART_PORT` `HY2_PORT` `PANEL_PORT` | 随机 | 指定端口 |
+| `VLESS_PORT` `SMART_PORT` `HY2_PORT` `SMART_HY2_PORT` `PANEL_PORT` | 随机 | 指定端口 |
 | `REALITY_SNI` | `www.microsoft.com` | Reality 伪装的网站 |
 | `NODE_NAME` | `A-relay` | 节点名前缀 |
 | `B_LINK` | 空 | 安装时直接设置 B 机节点链接 |
@@ -70,7 +71,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/ryanlikaige/vps-relay/main/i
 2. 确认 A 机 80 端口能从外网访问（申请和续期证书要用）。
 3. 运行 `vps-relay set-domain panel.example.com`，或者安装时加 `DOMAIN=panel.example.com`。
 
-之后面板地址变成 `https://panel.example.com:端口/随机路径/`。Hysteria2 的链接会更新（不再需要跳过证书验证），需要在客户端重新导入；两个 VLESS 节点不受影响。
+之后面板地址变成 `https://panel.example.com:端口/随机路径/`。两个 Hysteria2 节点的链接会更新（不再需要跳过证书验证），需要在客户端重新导入；两个 VLESS 节点不受影响。
 
 ## 常用命令
 

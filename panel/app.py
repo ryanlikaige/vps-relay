@@ -66,7 +66,14 @@ lock = threading.Lock()
 
 def load_state():
     with open(STATE) as f:
-        return json.load(f)
+        state = json.load(f)
+    ib = state["inbounds"]
+    if "smart_hy2" not in ib:
+        # 旧版本升级：补上智能分流的 Hysteria2 节点
+        used = {n["port"] for n in ib.values()} | {state["panel"]["port"]} | set(state["probe"].values())
+        ib["smart_hy2"] = {"port": pick_port("SMART_HY2_PORT", used), "password": secrets.token_urlsafe(16)}
+        save_state(state)
+    return state
 
 
 def write_json(path, data, mode=0o600):
@@ -272,18 +279,19 @@ def node_links(state):
     vless = ("vless://%s@%s:%d?encryption=none&flow=xtls-rprx-vision&security=reality"
              "&sni=%s&fp=chrome&pbk=%s&sid=%s&type=tcp#%s") % (
         v["uuid"], h, v["port"], v["sni"], v["public_key"], v["short_id"], link_name(state, "reality"))
-    y = ib["hy2"]
-    if state.get("domain"):
-        hy2 = "hysteria2://%s@%s:%d?sni=%s&alpn=h3#%s" % (
-            urllib.parse.quote(y["password"]), h, y["port"], state["domain"], link_name(state, "hy2"))
-    else:
-        hy2 = "hysteria2://%s@%s:%d?sni=%s&alpn=h3&insecure=1#%s" % (
-            urllib.parse.quote(y["password"]), h, y["port"], y["sni"], link_name(state, "hy2"))
+    def hy2_link(node, suffix):
+        if state.get("domain"):
+            return "hysteria2://%s@%s:%d?sni=%s&alpn=h3#%s" % (
+                urllib.parse.quote(node["password"]), h, node["port"], state["domain"], link_name(state, suffix))
+        return "hysteria2://%s@%s:%d?sni=%s&alpn=h3&insecure=1#%s" % (
+            urllib.parse.quote(node["password"]), h, node["port"], ib["hy2"]["sni"], link_name(state, suffix))
+    hy2 = hy2_link(ib["hy2"], "hy2")
+    smart_hy2 = hy2_link(ib["smart_hy2"], "smart-hy2")
     m = ib["smart"]
     smart = ("vless://%s@%s:%d?encryption=none&flow=xtls-rprx-vision&security=reality"
              "&sni=%s&fp=chrome&pbk=%s&sid=%s&type=tcp#%s") % (
         m["uuid"], h, m["port"], v["sni"], v["public_key"], m["short_id"], link_name(state, "smart"))
-    return {"vless": vless, "hy2": hy2, "smart": smart}
+    return {"vless": vless, "hy2": hy2, "smart": smart, "smart_hy2": smart_hy2}
 
 
 def build_rules(state):
@@ -307,6 +315,16 @@ def cert_paths(state, fallback):
 def panel_url(state):
     host = state.get("domain") or host_for_link(state["server_ip"])
     return "https://%s:%d%s/" % (host, state["panel"]["port"], state["panel"]["path"])
+
+
+def hy2_inbound(tag, state, node):
+    return {
+        "type": "hysteria2", "tag": tag, "listen": "::", "listen_port": node["port"],
+        "users": [{"password": node["password"]}],
+        "tls": {"enabled": True, "alpn": ["h3"],
+                "certificate_path": cert_paths(state, "hy2")[0],
+                "key_path": cert_paths(state, "hy2")[1]},
+    }
 
 
 def reality_inbound(tag, ib, node):
@@ -334,16 +352,11 @@ def build_config(state):
         "log": {"level": "warn", "timestamp": True},
         "dns": {"servers": [{"type": "local", "tag": "local"}]},
         "inbounds": [
-            # 节点 1、2：纯直连；节点 3：智能分流，规则内网站走 B
+            # 节点 1、2：纯直连；节点 3、4：智能分流，规则内网站走 B
+            hy2_inbound("hy2-in", state, ib["hy2"]),
             reality_inbound("vless-in", ib, ib["vless"]),
             reality_inbound("smart-in", ib, ib["smart"]),
-            {
-                "type": "hysteria2", "tag": "hy2-in", "listen": "::", "listen_port": ib["hy2"]["port"],
-                "users": [{"password": ib["hy2"]["password"]}],
-                "tls": {"enabled": True, "alpn": ["h3"],
-                        "certificate_path": cert_paths(state, "hy2")[0],
-                        "key_path": cert_paths(state, "hy2")[1]},
-            },
+            hy2_inbound("smart-hy2-in", state, ib["smart_hy2"]),
             # 面板自检用：probe-b 固定走 B，probe-smart 按规则分流
             {"type": "mixed", "tag": "probe-b", "listen": "127.0.0.1", "listen_port": state["probe"]["b"]},
             {"type": "mixed", "tag": "probe-smart", "listen": "127.0.0.1", "listen_port": state["probe"]["smart"]},
@@ -354,7 +367,7 @@ def build_config(state):
             "rules": [
                 {"action": "sniff"},
                 {"inbound": ["probe-b"], "outbound": "to-b"},
-                {"inbound": ["smart-in", "probe-smart"], "rule_set": ["via-b"], "outbound": "to-b"},
+                {"inbound": ["smart-in", "smart-hy2-in", "probe-smart"], "rule_set": ["via-b"], "outbound": "to-b"},
             ],
             "final": "direct",
             "default_domain_resolver": "local",
@@ -622,7 +635,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "upstream": {"link_type": up["outbound"]["type"], "server": up["outbound"]["server"],
                              "port": up["outbound"]["server_port"]} if up else None,
                 "links": node_links(state),
-                "ports": {k: state["inbounds"][k]["port"] for k in ("vless", "hy2", "smart")},
+                "ports": {k: state["inbounds"][k]["port"] for k in ("vless", "hy2", "smart", "smart_hy2")},
             })
         elif sub == "/api/status":
             self._send(200, {"a": system_status(), "b": upstream_status(state)})
@@ -802,6 +815,7 @@ def cmd_init():
             "smart": {"port": pick_port("SMART_PORT", used), "uuid": run([SINGBOX, "generate", "uuid"])[1],
                       "short_id": secrets.token_hex(8)},
             "hy2": {"port": pick_port("HY2_PORT", used), "password": secrets.token_urlsafe(16), "sni": "www.bing.com"},
+            "smart_hy2": {"port": pick_port("SMART_HY2_PORT", used), "password": secrets.token_urlsafe(16)},
         },
         "probe": {"b": pick_port("", used), "smart": pick_port("", used)},
         "rules": {"domain_suffix": list(DEFAULT_SUFFIXES), "domain_keyword": list(DEFAULT_KEYWORDS)},
@@ -831,7 +845,8 @@ def cmd_info():
         print("初始密码: %s  （在面板里改密码后此文件会被删除）" % open(pw_file).read().strip())
     print("\n节点 1  Hysteria2（A 直连）:\n%s" % links["hy2"])
     print("\n节点 2  VLESS-Reality（A 直连）:\n%s" % links["vless"])
-    print("\n节点 3  智能分流（规则内网站走 B，其余 A 直连）:\n%s" % links["smart"])
+    print("\n节点 3  智能分流 VLESS-Reality（规则内网站走 B，其余 A 直连）:\n%s" % links["smart"])
+    print("\n节点 4  智能分流 Hysteria2（规则内网站走 B，其余 A 直连）:\n%s" % links["smart_hy2"])
     up = state.get("upstream")
     print("\nB 机出口: %s" % ("%s %s:%s" % (up["outbound"]["type"], up["outbound"]["server"], up["outbound"]["server_port"])
                            if up else "未设置（请在面板里粘贴 B 机的节点链接）"))
@@ -880,7 +895,9 @@ def cmd_set_domain(domain):
     run(["systemctl", "restart", "vps-relay-panel"])
     print("完成，证书会自动续期。")
     print("管理面板: " + panel_url(state))
-    print("Hysteria2 节点链接已更新（不再需要跳过证书验证），请在客户端重新导入:\n" + node_links(state)["hy2"])
+    links = node_links(state)
+    print("两个 Hysteria2 节点链接已更新（不再需要跳过证书验证），请在客户端重新导入:\n%s\n%s"
+          % (links["hy2"], links["smart_hy2"]))
 
 
 def main():

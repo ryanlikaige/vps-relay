@@ -73,7 +73,7 @@ pre{background:var(--code);padding:10px;border-radius:6px;max-height:320px;overf
 
   <section class="card wide">
     <h2>智能分流：走 B 机的网站</h2>
-    <p class="mute">只对"智能分流"节点生效。每行一个。域名后缀会同时匹配子域名，例如 <code>google.com</code> 会包含 <code>gemini.google.com</code>。保存后几秒内自动生效，不用重启，客户端也不用更新。</p>
+    <p class="mute">只对两个"智能分流"节点（节点 3、4）生效。每行一个。域名后缀会同时匹配子域名，例如 <code>google.com</code> 会包含 <code>gemini.google.com</code>。保存后几秒内自动生效，不用重启，客户端也不用更新。</p>
     <div class="cols">
       <div><div class="mute">域名后缀</div><textarea id="suffix"></textarea></div>
       <div><div class="mute">关键词（域名里含有就匹配）</div><textarea id="keyword"></textarea></div>
@@ -130,7 +130,8 @@ async function login() {
 const NODES = [
   ["hy2", "节点 1 · Hysteria2", "A 机直连，UDP 协议，速度快"],
   ["vless", "节点 2 · VLESS Reality", "A 机直连，TCP 协议，稳定"],
-  ["smart", "节点 3 · 智能分流", "下面列表里的网站走 B 机出口，其余从 A 直连"],
+  ["smart", "节点 3 · 智能分流 VLESS Reality", "下面列表里的网站走 B 机出口，其余从 A 直连"],
+  ["smart_hy2", "节点 4 · 智能分流 Hysteria2", "分流规则同节点 3，UDP 协议"],
 ];
 
 function renderNodes() {

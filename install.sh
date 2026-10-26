@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# vps-relay 一键安装：sing-box（三个节点）+ 网页管理面板
+# vps-relay 一键安装：sing-box（四个节点）+ 网页管理面板
 #   安装/升级: bash install.sh
 #   卸载:      bash install.sh uninstall
 # 可选环境变量: SB_VERSION REPO BRANCH SERVER_IP NODE_NAME REALITY_SNI
-#              VLESS_PORT HY2_PORT SMART_PORT PANEL_PORT B_LINK DOMAIN ENABLE_BBR=0
+#              VLESS_PORT HY2_PORT SMART_PORT SMART_HY2_PORT PANEL_PORT B_LINK DOMAIN ENABLE_BBR=0
 set -euo pipefail
 
 SB_VERSION="${SB_VERSION:-1.14.4}"
@@ -124,13 +124,14 @@ open_firewall() {
   local ports
   ports=$(python3 -c "
 import json; s=json.load(open('$ETC/state.json'))
-print(s['panel']['port'], s['inbounds']['vless']['port'], s['inbounds']['smart']['port'], s['inbounds']['hy2']['port'])")
+print(s['panel']['port'], s['inbounds']['vless']['port'], s['inbounds']['smart']['port'], s['inbounds']['hy2']['port'], s['inbounds']['smart_hy2']['port'])")
   set -- $ports
   if command -v ufw >/dev/null && ufw status | grep -q "Status: active"; then
     ufw allow "$1/tcp" >/dev/null; ufw allow "$2/tcp" >/dev/null; ufw allow "$3/tcp" >/dev/null; ufw allow "$4/udp" >/dev/null
+    ufw allow "$5/udp" >/dev/null
     ufw allow 80/tcp >/dev/null  # 申请/续期证书用
   elif command -v firewall-cmd >/dev/null && firewall-cmd --state >/dev/null 2>&1; then
-    firewall-cmd -q --permanent --add-port="$1/tcp" --add-port="$2/tcp" --add-port="$3/tcp" --add-port="$4/udp" --add-port=80/tcp
+    firewall-cmd -q --permanent --add-port="$1/tcp" --add-port="$2/tcp" --add-port="$3/tcp" --add-port="$4/udp" --add-port="$5/udp" --add-port=80/tcp
     firewall-cmd -q --reload
   fi
 }
@@ -170,5 +171,5 @@ echo
 vps-relay info
 echo
 grep -q '"domain": "' "$ETC/state.json" || echo "面板目前用自签名证书。想去掉浏览器警告，把域名解析到本机后运行: vps-relay set-domain 你的域名"
-echo "如果服务商有安全组/防火墙，请放行上面的面板端口(TCP)、两个 VLESS 端口(TCP)和 Hysteria2 端口(UDP)。"
+echo "如果服务商有安全组/防火墙，请放行上面的面板端口(TCP)、两个 VLESS 端口(TCP)和两个 Hysteria2 端口(UDP)。"
 echo "常用命令: vps-relay info | vps-relay reset-password | vps-relay set-domain 域名 | systemctl restart sb-relay"
