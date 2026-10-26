@@ -47,6 +47,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/ryanlikaige/vps-relay/main/i
 | `REALITY_SNI` | `www.microsoft.com` | Reality 伪装的网站 |
 | `NODE_NAME` | `A-relay` | 节点名前缀 |
 | `B_LINK` | 空 | 安装时直接设置 B 机节点链接 |
+| `DOMAIN` | 空 | 安装时直接给面板申请正式证书（见下方"域名"） |
 | `SB_VERSION` | `1.14.4` | sing-box 版本 |
 | `ENABLE_BBR` | `1` | 设为 0 不开启 BBR |
 
@@ -59,7 +60,17 @@ bash <(curl -fsSL https://raw.githubusercontent.com/ryanlikaige/vps-relay/main/i
 - 出口测试：A 直连 / 强制走 B / 智能分流，显示出口 IP 和 Gemini 访问结果
 - 节点链接复制和二维码、sing-box 日志、改密码
 
-面板使用自签名证书，浏览器提示不安全时选择继续访问。登录连续错 5 次会锁 10 分钟。
+登录连续错 5 次会锁 10 分钟。
+
+## 域名（可选）
+
+不配域名也能用，只是面板用自签名证书，浏览器会提示不安全。配上域名后，面板和 Hysteria2 节点都改用 Let's Encrypt 正式证书，自动续期：
+
+1. 在 DNS 里加一条 A 记录，把域名（比如 `panel.example.com`）指向 A 机 IP。用 Cloudflare 的话要关掉小黄云（选"仅 DNS"）。
+2. 确认 A 机 80 端口能从外网访问（申请和续期证书要用）。
+3. 运行 `vps-relay set-domain panel.example.com`，或者安装时加 `DOMAIN=panel.example.com`。
+
+之后面板地址变成 `https://panel.example.com:端口/随机路径/`。Hysteria2 的链接会更新（不再需要跳过证书验证），需要在客户端重新导入；两个 VLESS 节点不受影响。
 
 ## 常用命令
 
@@ -67,6 +78,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/ryanlikaige/vps-relay/main/i
 vps-relay info              # 面板地址和节点链接
 vps-relay reset-password    # 忘记面板密码
 vps-relay set-upstream 'vless://...'  # 命令行设置 B 机节点
+vps-relay set-domain panel.example.com  # 配置域名和正式证书
 systemctl restart sb-relay  # 重启 sing-box
 journalctl -u sb-relay -f   # 看日志
 bash install.sh             # 再次运行即升级，节点和规则保留

@@ -3,7 +3,7 @@
 #   安装/升级: bash install.sh
 #   卸载:      bash install.sh uninstall
 # 可选环境变量: SB_VERSION REPO BRANCH SERVER_IP NODE_NAME REALITY_SNI
-#              VLESS_PORT HY2_PORT SMART_PORT PANEL_PORT B_LINK ENABLE_BBR=0
+#              VLESS_PORT HY2_PORT SMART_PORT PANEL_PORT B_LINK DOMAIN ENABLE_BBR=0
 set -euo pipefail
 
 SB_VERSION="${SB_VERSION:-1.14.4}"
@@ -32,15 +32,15 @@ uninstall() {
 
 install_deps() {
   local need=()
-  for c in curl tar openssl python3; do command -v "$c" >/dev/null || need+=("$c"); done
+  for c in curl tar openssl python3 socat crontab; do command -v "$c" >/dev/null || need+=("$c"); done
   [ ${#need[@]} -eq 0 ] && return
   echo "安装依赖: ${need[*]}"
   if command -v apt-get >/dev/null; then
-    apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl tar openssl python3 ca-certificates
+    apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl tar openssl python3 ca-certificates socat cron
   elif command -v dnf >/dev/null; then
-    dnf install -y -q curl tar openssl python3 ca-certificates
+    dnf install -y -q curl tar openssl python3 ca-certificates socat cronie
   elif command -v yum >/dev/null; then
-    yum install -y -q curl tar openssl python3 ca-certificates
+    yum install -y -q curl tar openssl python3 ca-certificates socat cronie
   else
     die "不认识的系统，请手动安装: ${need[*]}"
   fi
@@ -128,8 +128,9 @@ print(s['panel']['port'], s['inbounds']['vless']['port'], s['inbounds']['smart']
   set -- $ports
   if command -v ufw >/dev/null && ufw status | grep -q "Status: active"; then
     ufw allow "$1/tcp" >/dev/null; ufw allow "$2/tcp" >/dev/null; ufw allow "$3/tcp" >/dev/null; ufw allow "$4/udp" >/dev/null
+    ufw allow 80/tcp >/dev/null  # 申请/续期证书用
   elif command -v firewall-cmd >/dev/null && firewall-cmd --state >/dev/null 2>&1; then
-    firewall-cmd -q --permanent --add-port="$1/tcp" --add-port="$2/tcp" --add-port="$3/tcp" --add-port="$4/udp"
+    firewall-cmd -q --permanent --add-port="$1/tcp" --add-port="$2/tcp" --add-port="$3/tcp" --add-port="$4/udp" --add-port=80/tcp
     firewall-cmd -q --reload
   fi
 }
@@ -161,10 +162,13 @@ enable_bbr
 sleep 2
 systemctl is-active -q sb-relay || { journalctl -u sb-relay -n 30 --no-pager; die "sing-box 启动失败"; }
 systemctl is-active -q vps-relay-panel || { journalctl -u vps-relay-panel -n 30 --no-pager; die "面板启动失败"; }
+if [ -n "${DOMAIN:-}" ]; then
+  vps-relay set-domain "$DOMAIN" || red "域名证书没有申请成功，面板暂时用 IP 访问。解决后运行: vps-relay set-domain $DOMAIN"
+fi
 green "安装完成"
 echo
 vps-relay info
 echo
-echo "面板使用自签名证书，浏览器提示不安全时选择继续访问即可。"
+grep -q '"domain": "' "$ETC/state.json" || echo "面板目前用自签名证书。想去掉浏览器警告，把域名解析到本机后运行: vps-relay set-domain 你的域名"
 echo "如果服务商有安全组/防火墙，请放行上面的面板端口(TCP)、两个 VLESS 端口(TCP)和 Hysteria2 端口(UDP)。"
-echo "常用命令: vps-relay info | vps-relay reset-password | systemctl restart sb-relay"
+echo "常用命令: vps-relay info | vps-relay reset-password | vps-relay set-domain 域名 | systemctl restart sb-relay"

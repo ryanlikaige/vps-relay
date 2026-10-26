@@ -8,6 +8,7 @@
   app.py info            显示面板地址和节点链接
   app.py reset-password  重置面板密码
   app.py set-upstream <分享链接>  设置 B 机节点
+  app.py set-domain <域名>       给面板和 Hysteria2 申请正式证书
 """
 import base64
 import hashlib
@@ -272,8 +273,12 @@ def node_links(state):
              "&sni=%s&fp=chrome&pbk=%s&sid=%s&type=tcp#%s") % (
         v["uuid"], h, v["port"], v["sni"], v["public_key"], v["short_id"], link_name(state, "reality"))
     y = ib["hy2"]
-    hy2 = "hysteria2://%s@%s:%d?sni=%s&alpn=h3&insecure=1#%s" % (
-        urllib.parse.quote(y["password"]), h, y["port"], y["sni"], link_name(state, "hy2"))
+    if state.get("domain"):
+        hy2 = "hysteria2://%s@%s:%d?sni=%s&alpn=h3#%s" % (
+            urllib.parse.quote(y["password"]), h, y["port"], state["domain"], link_name(state, "hy2"))
+    else:
+        hy2 = "hysteria2://%s@%s:%d?sni=%s&alpn=h3&insecure=1#%s" % (
+            urllib.parse.quote(y["password"]), h, y["port"], y["sni"], link_name(state, "hy2"))
     m = ib["smart"]
     smart = ("vless://%s@%s:%d?encryption=none&flow=xtls-rprx-vision&security=reality"
              "&sni=%s&fp=chrome&pbk=%s&sid=%s&type=tcp#%s") % (
@@ -291,6 +296,17 @@ def build_rules(state):
         # 空规则集也要能被 sing-box 加载，用一个不会命中的域名占位
         rule["domain"] = ["placeholder.invalid"]
     return {"version": 3, "rules": [rule]}
+
+
+def cert_paths(state, fallback):
+    """有域名时用 Let's Encrypt 证书，否则用自签名证书。"""
+    name = "domain" if state.get("domain") and os.path.exists(os.path.join(ETC, "domain.crt")) else fallback
+    return os.path.join(ETC, name + ".crt"), os.path.join(ETC, name + ".key")
+
+
+def panel_url(state):
+    host = state.get("domain") or host_for_link(state["server_ip"])
+    return "https://%s:%d%s/" % (host, state["panel"]["port"], state["panel"]["path"])
 
 
 def reality_inbound(tag, ib, node):
@@ -325,8 +341,8 @@ def build_config(state):
                 "type": "hysteria2", "tag": "hy2-in", "listen": "::", "listen_port": ib["hy2"]["port"],
                 "users": [{"password": ib["hy2"]["password"]}],
                 "tls": {"enabled": True, "alpn": ["h3"],
-                        "certificate_path": os.path.join(ETC, "hy2.crt"),
-                        "key_path": os.path.join(ETC, "hy2.key")},
+                        "certificate_path": cert_paths(state, "hy2")[0],
+                        "key_path": cert_paths(state, "hy2")[1]},
             },
             # 面板自检用：probe-b 固定走 B，probe-smart 按规则分流
             {"type": "mixed", "tag": "probe-b", "listen": "127.0.0.1", "listen_port": state["probe"]["b"]},
@@ -714,7 +730,7 @@ def serve():
     else:
         srv = http.server.ThreadingHTTPServer(("0.0.0.0", state["panel"]["port"]), Handler)
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-    ctx.load_cert_chain(os.path.join(ETC, "panel.crt"), os.path.join(ETC, "panel.key"))
+    ctx.load_cert_chain(*cert_paths(state, "panel"))
     srv.socket = ctx.wrap_socket(srv.socket, server_side=True)
     srv.serve_forever()
 
@@ -809,7 +825,7 @@ def cmd_init():
 def cmd_info():
     state = load_state()
     links = node_links(state)
-    print("管理面板: https://%s:%d%s/" % (host_for_link(state["server_ip"]), state["panel"]["port"], state["panel"]["path"]))
+    print("管理面板: " + panel_url(state))
     pw_file = os.path.join(ETC, ".initial-password")
     if os.path.exists(pw_file):
         print("初始密码: %s  （在面板里改密码后此文件会被删除）" % open(pw_file).read().strip())
@@ -819,6 +835,52 @@ def cmd_info():
     up = state.get("upstream")
     print("\nB 机出口: %s" % ("%s %s:%s" % (up["outbound"]["type"], up["outbound"]["server"], up["outbound"]["server_port"])
                            if up else "未设置（请在面板里粘贴 B 机的节点链接）"))
+
+
+ACME = os.path.expanduser("~/.acme.sh/acme.sh")
+
+
+def cmd_set_domain(domain):
+    """用 acme.sh 申请 Let's Encrypt 证书，给面板和 Hysteria2 用，自动续期。"""
+    try:
+        domain = clean_list([domain])[0]
+    except (ValueError, IndexError):
+        raise SystemExit("域名格式不对: %s" % domain)
+    state = load_state()
+    try:
+        ips = {a[4][0] for a in socket.getaddrinfo(domain, None, socket.AF_INET)}
+    except socket.gaierror:
+        ips = set()
+    if state["server_ip"] not in ips:
+        raise SystemExit("%s 当前解析到 %s，不是本机 %s。\n请先把域名 A 记录指向本机"
+                         "（Cloudflare 请关闭小黄云，用「仅 DNS」），等几分钟再试。"
+                         % (domain, ", ".join(sorted(ips)) or "（无记录）", state["server_ip"]))
+    if not os.path.exists(ACME):
+        print("安装 acme.sh ...")
+        code, out = run(["sh", "-c", "curl -fsSL https://get.acme.sh | sh"], timeout=300)
+        if code != 0:
+            raise SystemExit("安装 acme.sh 失败:\n" + out)
+    run([ACME, "--set-default-ca", "--server", "letsencrypt"])
+    print("申请证书（需要本机 80 端口可以从外网访问）...")
+    code, out = run([ACME, "--issue", "-d", domain, "--standalone", "--keylength", "ec-256"], timeout=300)
+    if code not in (0, 2):  # 2 = 证书已存在且未到续期时间
+        raise SystemExit("申请证书失败:\n" + out[-2000:])
+    code, out = run([ACME, "--install-cert", "-d", domain, "--ecc",
+                     "--fullchain-file", os.path.join(ETC, "domain.crt"),
+                     "--key-file", os.path.join(ETC, "domain.key"),
+                     "--reloadcmd", "systemctl restart sb-relay vps-relay-panel"], timeout=120)
+    if code != 0:
+        raise SystemExit("安装证书失败:\n" + out[-2000:])
+    os.chmod(os.path.join(ETC, "domain.key"), 0o600)
+    state["domain"] = domain
+    ok, msg = apply_config(state)
+    if not ok:
+        raise SystemExit(msg)
+    save_state(state)
+    run(["systemctl", "restart", "vps-relay-panel"])
+    print("完成，证书会自动续期。")
+    print("管理面板: " + panel_url(state))
+    print("Hysteria2 节点链接已更新（不再需要跳过证书验证），请在客户端重新导入:\n" + node_links(state)["hy2"])
 
 
 def main():
@@ -841,6 +903,8 @@ def main():
         save_state(state)
         remove_initial_password()
         print("新密码: " + pw)
+    elif cmd == "set-domain" and len(sys.argv) > 2:
+        cmd_set_domain(sys.argv[2])
     elif cmd == "set-upstream" and len(sys.argv) > 2:
         state = load_state()
         state["upstream"] = {"outbound": parse_link(sys.argv[2])}
