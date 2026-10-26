@@ -349,7 +349,7 @@ def build_config(state):
     to_b = dict(up["outbound"]) if up else {"type": "direct"}
     to_b["tag"] = "to-b"
     return {
-        "log": {"level": "warn", "timestamp": True},
+        "log": {"level": "info" if state.get("debug_log") else "warn", "timestamp": True},
         "dns": {"servers": [{"type": "local", "tag": "local"}]},
         "inbounds": [
             # 节点 1、2：纯直连；节点 3、4：智能分流，规则内网站走 B
@@ -406,6 +406,22 @@ def apply_config(state):
             run(["systemctl", "restart", SERVICE])
         return False, "重启失败，已回滚: " + (out or journal(20))
     return True, "已生效"
+
+
+ROUTED_RE = re.compile(r"outbound/(\w+)\[([\w-]+)\]: outbound connection to (\S+)")
+
+
+def routed_domains(lines=5000):
+    """统计日志里各目标域名走了哪个出口（需要先开启诊断日志）。"""
+    code, out = run(["journalctl", "-u", SERVICE, "-n", str(lines), "--no-pager", "-o", "cat"])
+    seen = {}
+    for m in ROUTED_RE.finditer(re.sub(r"\x1b\[[0-9;]*m", "", out)):
+        host = m.group(3).rsplit(":", 1)[0]
+        via = "B" if m.group(2) == "to-b" else "直连"
+        seen[(host, via)] = seen.get((host, via), 0) + 1
+    rows = [{"host": h, "via": v, "count": c} for (h, v), c in seen.items()]
+    rows.sort(key=lambda r: (r["via"] != "B", -r["count"]))
+    return rows[:300]
 
 
 def service_active(name=SERVICE):
@@ -635,12 +651,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "upstream": {"link_type": up["outbound"]["type"], "server": up["outbound"]["server"],
                              "port": up["outbound"]["server_port"]} if up else None,
                 "links": node_links(state),
+                "debug_log": bool(state.get("debug_log")),
                 "ports": {k: state["inbounds"][k]["port"] for k in ("vless", "hy2", "smart", "smart_hy2")},
             })
         elif sub == "/api/status":
             self._send(200, {"a": system_status(), "b": upstream_status(state)})
         elif sub == "/api/logs":
             self._send(200, {"logs": journal(200)})
+        elif sub == "/api/routed":
+            self._send(200, {"rows": routed_domains(), "debug_log": bool(state.get("debug_log"))})
         else:
             self._send(404, {"error": "not found"})
 
@@ -708,6 +727,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if via not in ("direct", "b", "smart"):
                     raise ValueError("via 参数错误")
                 self._send(200, exit_test(state, via))
+            elif sub == "/api/debug":
+                with lock:
+                    state = load_state()
+                    state["debug_log"] = bool(data.get("on"))
+                    ok, msg = apply_config(state)
+                    if ok:
+                        save_state(state)
+                self._send(200 if ok else 500, {"ok": ok, "message": msg, "debug_log": state["debug_log"]} if ok else {"error": msg})
             elif sub == "/api/restart":
                 with lock:
                     ok, msg = apply_config(load_state())

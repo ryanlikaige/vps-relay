@@ -97,6 +97,10 @@ pre{background:var(--code);padding:10px;border-radius:6px;max-height:320px;overf
     <h2>sing-box 日志</h2>
     <div class="row" style="margin:0 0 8px"><button class="ghost" id="logsBtn">刷新日志</button></div>
     <pre id="logs">点击刷新查看</pre>
+    <h2 style="margin-top:14px">诊断：哪些域名走了 B</h2>
+    <p class="mute">用来排查"某个网站/软件在智能节点下异常"。先点"开启诊断"（会记录每个连接，会重启一次 sing-box，用完记得关闭），然后在客户端操作出问题的软件，再点"查看"，会列出访问过的域名和它们走的出口。</p>
+    <div class="row" style="margin:0 0 8px"><button class="ghost" id="dbgOn">开启诊断</button><button class="ghost" id="dbgOff">关闭诊断</button><button class="ghost" id="routedBtn">查看</button><span id="dbgState" class="mute"></span></div>
+    <table id="routed"></table>
   </section>
 </main>
 </div>
@@ -199,7 +203,7 @@ async function runTest(via, btn) {
 async function boot() {
   state = await api("state");
   $("#login").hidden = true; $("#app").hidden = false;
-  $("#title").textContent = state.name + " 中转面板";
+  $("#title").textContent = state.name + " 中转面板"; dbgLabel(state.debug_log);
   renderNodes(); renderRules();
   refreshStatus().catch(e => toast(e.message));
 }
@@ -236,6 +240,15 @@ $("#rulesReset").onclick = e => { if (confirm("用默认的 Gemini 域名列表�
 $("#matchIn").oninput = () => { $("#matchOut").innerHTML = matches($("#matchIn").value) || ""; };
 document.querySelectorAll("button[data-via]").forEach(b => b.onclick = () => runTest(b.dataset.via, b));
 $("#restartBtn").onclick = e => { if (confirm("重启会让正在使用的连接断开几秒，确定？")) busy(e.target, async () => { const r = await api("restart", {}); toast(r.message); await refreshStatus(); }); };
+const dbgLabel = on => $("#dbgState").textContent = on ? "诊断：已开启" : "诊断：未开启";
+$("#dbgOn").onclick = e => busy(e.target, async () => { const r = await api("debug", {on: true}); dbgLabel(r.debug_log); toast("诊断已开启"); });
+$("#dbgOff").onclick = e => busy(e.target, async () => { const r = await api("debug", {on: false}); dbgLabel(r.debug_log); toast("诊断已关闭"); });
+$("#routedBtn").onclick = e => busy(e.target, async () => {
+  const r = await api("routed"); dbgLabel(r.debug_log);
+  $("#routed").innerHTML = r.rows.length
+    ? `<tr><td>出口</td><td>域名（次数）</td></tr>` + r.rows.map(x => `<tr><td class="${x.via === "B" ? "warn" : ""}">${x.via}</td><td>${esc(x.host)} (${x.count})</td></tr>`).join("")
+    : `<tr><td colspan="2" class="mute">没有记录。请确认已开启诊断，并且刚在客户端用过智能节点。</td></tr>`;
+});
 $("#logsBtn").onclick = e => busy(e.target, async () => { const r = await api("logs"); $("#logs").textContent = r.logs || "（无日志）"; });
 
 boot().catch(() => showLogin());
