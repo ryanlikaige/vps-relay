@@ -70,6 +70,12 @@ PRESETS = [
     {"id": "claude", "name": "Claude / Anthropic",
      "desc": "Claude 网页、桌面版和 App、Anthropic API",
      "suffix": ["claude.ai", "claude.com", "anthropic.com", "claudeusercontent.com", "clau.de"]},
+    {"id": "meta", "name": "Meta AI",
+     "desc": "meta.ai 网页版和 Llama 官网（Facebook、Instagram 里的 Meta AI 和主站共用域名，没法单独分流）",
+     "suffix": ["meta.ai", "ai.meta.com", "llama.com"]},
+    {"id": "grok", "name": "Grok / xAI",
+     "desc": "grok.com 和 xAI API（X 网站里的 Grok 和 X 共用域名，没法单独分流）",
+     "suffix": ["grok.com", "x.ai"]},
 ]
 
 
