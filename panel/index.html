@@ -97,6 +97,19 @@ pre{background:var(--code);padding:10px;border-radius:6px;max-height:320px;overf
   </section>
 
   <section class="card wide">
+    <h2>定时重启 VPS</h2>
+    <p class="mute">每天在设定的时间自动重启整台 VPS。sing-box 和面板都设为开机自启，节点、分流规则、B 机出口、证书等设置都保存在硬盘上，重启后和重启前完全一致；开机后面板还会自检，sing-box 没起来会自动重启它一次，结果显示在下面。</p>
+    <table id="rebootInfo"></table>
+    <div class="row">
+      <label><input type="checkbox" id="rbEnabled" style="width:auto"> 每天自动重启</label>
+      <input type="time" id="rbTime" value="04:00" style="width:auto">
+      <button id="rbSave">保存</button>
+      <button class="ghost" id="rbNow">立即重启 VPS</button>
+    </div>
+    <p class="mute">时间按服务器本机时区计算（上表显示的"服务器时间"）。建议选你不用网络的时段，重启期间所有节点会中断 1 到 2 分钟。</p>
+  </section>
+
+  <section class="card wide">
     <h2>sing-box 日志</h2>
     <div class="row" style="margin:0 0 8px"><button class="ghost" id="logsBtn">刷新日志</button></div>
     <pre id="logs">点击刷新查看</pre>
@@ -230,6 +243,7 @@ async function boot() {
   $("#title").textContent = state.name + " 中转面板"; dbgLabel(state.debug_log);
   renderNodes(); renderRules();
   refreshStatus().catch(e => toast(e.message));
+  refreshReboot().catch(() => {});
 }
 
 $("#loginBtn").onclick = login;
@@ -273,6 +287,23 @@ $("#rulesReset").onclick = e => { if (confirm("清空全部规则？智能分流
 $("#matchIn").oninput = () => { $("#matchOut").innerHTML = matches($("#matchIn").value) || ""; };
 document.querySelectorAll("button[data-via]").forEach(b => b.onclick = () => runTest(b.dataset.via, b));
 $("#restartBtn").onclick = e => { if (confirm("重启会让正在使用的连接断开几秒，确定？")) busy(e.target, async () => { const r = await api("restart", {}); toast(r.message); await refreshStatus(); }); };
+async function refreshReboot() {
+  const r = await api("reboot");
+  $("#rbEnabled").checked = r.enabled; $("#rbTime").value = r.time;
+  const bc = r.boot_check;
+  const bcTxt = !bc ? `<span class="mute">还没有记录（开机后约 30 秒会自检一次）</span>`
+    : (bc.ok ? `<span class="ok">正常${bc.restarted ? "（sing-box 开机时没起来，已自动重启恢复）" : ""}</span>` : `<span class="bad">sing-box 没能恢复，请查看日志</span>`) + ` <span class="mute">${esc(bc.at)}</span>`;
+  $("#rebootInfo").innerHTML = `
+    <tr><td>服务器时间</td><td>${esc(r.now)} ${esc(r.tz)}</td></tr>
+    <tr><td>本次开机</td><td>${esc(r.booted_at || "?")}</td></tr>
+    <tr><td>定时重启</td><td>${r.enabled ? `<span class="ok">已开启</span>，每天 ${esc(r.time)}，下次：${esc(r.next || "?")}${r.timer_active === false ? ' <span class="bad">（定时器没在运行）</span>' : ""}` : '<span class="mute">未开启</span>'}</td></tr>
+    <tr><td>开机自检</td><td>${bcTxt}</td></tr>`;
+}
+$("#rbSave").onclick = e => busy(e.target, async () => {
+  await api("reboot", {enabled: $("#rbEnabled").checked, time: $("#rbTime").value});
+  await refreshReboot(); toast("已保存");
+});
+$("#rbNow").onclick = e => { if (confirm("现在重启整台 VPS？所有节点会中断 1 到 2 分钟，面板也会暂时打不开。")) busy(e.target, async () => { const r = await api("reboot-now", {confirm: "reboot"}); toast(r.message, 8000); }); };
 const dbgLabel = on => $("#dbgState").textContent = on ? "诊断：已开启" : "诊断：未开启";
 $("#dbgOn").onclick = e => busy(e.target, async () => { const r = await api("debug", {on: true}); dbgLabel(r.debug_log); toast("诊断已开启"); });
 $("#dbgOff").onclick = e => busy(e.target, async () => { const r = await api("debug", {on: false}); dbgLabel(r.debug_log); toast("诊断已关闭"); });

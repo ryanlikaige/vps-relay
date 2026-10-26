@@ -61,6 +61,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/ryanlikaige/vps-relay/main/i
 - B 机出口：粘贴分享链接即可，支持 vless / vmess / hysteria2 / tuic / anytls / trojan / ss
 - A 机状态、A→B 延迟
 - 出口测试：A 直连 / 强制走 B / 智能分流，显示出口 IP 和 Gemini 访问结果
+- 定时重启 VPS：每天在设定时间自动重启（systemd 定时器）；sing-box 和面板开机自启，开机后面板自检，sing-box 没起来会自动重启一次，结果显示在面板里。也有"立即重启 VPS"按钮
 - 节点链接复制和二维码、sing-box 日志、改密码
 
 登录连续错 5 次会锁 10 分钟。

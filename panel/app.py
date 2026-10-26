@@ -461,6 +461,100 @@ def routed_domains(lines=5000):
     return rows[:300]
 
 
+SYSTEMD_DIR = os.environ.get("VPS_RELAY_SYSTEMD", "/etc/systemd/system")
+REBOOT_TIMER = "vps-relay-reboot.timer"
+TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+
+
+def reboot_units(hhmm):
+    service = """[Unit]
+Description=vps-relay 定时重启 VPS
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'sync; exec /bin/systemctl reboot'
+"""
+    # Persistent=false：错过时间点（比如那时机器本来就关着）开机后不要补重启，避免连环重启
+    timer = """[Unit]
+Description=vps-relay 每日定时重启
+
+[Timer]
+OnCalendar=*-*-* %s:00
+Persistent=false
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target
+""" % hhmm
+    return service, timer
+
+
+def apply_reboot_schedule(cfg):
+    if cfg.get("enabled"):
+        if not TIME_RE.match(str(cfg.get("time", ""))):
+            raise ValueError("时间格式应为 HH:MM，例如 04:30")
+        service, timer = reboot_units(cfg["time"])
+        with open(os.path.join(SYSTEMD_DIR, "vps-relay-reboot.service"), "w") as f:
+            f.write(service)
+        with open(os.path.join(SYSTEMD_DIR, REBOOT_TIMER), "w") as f:
+            f.write(timer)
+        run(["systemctl", "daemon-reload"])
+        code, out = run(["systemctl", "enable", "--now", REBOOT_TIMER])
+        if code != 0:
+            raise ValueError("启用定时器失败: " + out)
+        run(["systemctl", "restart", REBOOT_TIMER])  # 改了时间后让新时间立即生效
+    else:
+        run(["systemctl", "disable", "--now", REBOOT_TIMER])
+
+
+def reboot_info(state):
+    cfg = state.get("reboot") or {"enabled": False, "time": "04:00"}
+    info = {"enabled": bool(cfg.get("enabled")), "time": cfg.get("time", "04:00")}
+    info["now"] = time.strftime("%Y-%m-%d %H:%M:%S")
+    info["tz"] = time.strftime("%Z %z")
+    try:
+        info["booted_at"] = time.strftime("%Y-%m-%d %H:%M:%S",
+                                          time.localtime(time.time() - float(open("/proc/uptime").read().split()[0])))
+    except OSError:
+        pass
+    if info["enabled"]:
+        code, out = run(["systemctl", "show", REBOOT_TIMER, "-p", "NextElapseUSecRealtime", "--value"])
+        info["next"] = out.strip() if code == 0 and out.strip() else None
+        info["timer_active"] = run(["systemctl", "is-active", REBOOT_TIMER])[1].strip() == "active"
+    info["boot_check"] = state.get("boot_check")
+    return info
+
+
+def tcp_listening(port):
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=2):
+            return True
+    except OSError:
+        return False
+
+
+def post_boot_check():
+    """开机后自检：确认 sing-box 在运行且节点端口在监听，不正常就重启它一次，并把结果记下来给面板显示。"""
+    try:
+        if float(open("/proc/uptime").read().split()[0]) > 600:
+            return  # 只是面板自己重启，不是开机
+    except OSError:
+        return
+    time.sleep(25)  # 等 sb-relay 和网络起来
+    for attempt in (1, 2):
+        state = load_state()
+        ib = state["inbounds"]
+        ok = service_active() and all(tcp_listening(ib[k]["port"]) for k in ("vless", "smart"))
+        if ok or attempt == 2:
+            break
+        run(["systemctl", "restart", SERVICE])
+        time.sleep(10)
+    with lock:
+        state = load_state()
+        state["boot_check"] = {"at": time.strftime("%Y-%m-%d %H:%M:%S"), "ok": ok, "restarted": attempt == 2 or (not ok)}
+        save_state(state)
+
+
 def service_active(name=SERVICE):
     code, out = run(["systemctl", "is-active", name])
     return out.strip() == "active"
@@ -694,6 +788,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             })
         elif sub == "/api/status":
             self._send(200, {"a": system_status(), "b": upstream_status(state)})
+        elif sub == "/api/reboot":
+            self._send(200, reboot_info(state))
         elif sub == "/api/logs":
             self._send(200, {"logs": journal(200)})
         elif sub == "/api/routed":
@@ -788,6 +884,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     if ok:
                         save_state(state)
                 self._send(200 if ok else 500, {"ok": ok, "message": msg, "debug_log": state["debug_log"]} if ok else {"error": msg})
+            elif sub == "/api/reboot":
+                cfg = {"enabled": bool(data.get("enabled")), "time": str(data.get("time", "04:00"))}
+                with lock:
+                    state = load_state()
+                    apply_reboot_schedule(cfg)
+                    state["reboot"] = cfg
+                    save_state(state)
+                self._send(200, reboot_info(state))
+            elif sub == "/api/reboot-now":
+                if data.get("confirm") != "reboot":
+                    raise ValueError("缺少确认参数")
+                threading.Timer(3, lambda: run(["systemctl", "reboot"])).start()
+                self._send(200, {"ok": True, "message": "3 秒后重启，面板会暂时打不开，大约 1 到 2 分钟后恢复"})
             elif sub == "/api/restart":
                 with lock:
                     ok, msg = apply_config(load_state())
@@ -825,6 +934,7 @@ def serve():
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     ctx.load_cert_chain(*cert_paths(state, "panel"))
     srv.socket = ctx.wrap_socket(srv.socket, server_side=True)
+    threading.Thread(target=post_boot_check, daemon=True).start()
     srv.serve_forever()
 
 

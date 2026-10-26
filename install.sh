@@ -21,7 +21,9 @@ command -v systemctl >/dev/null || die "需要 systemd"
 
 uninstall() {
   systemctl disable --now sb-relay vps-relay-panel 2>/dev/null || true
-  rm -f /etc/systemd/system/sb-relay.service /etc/systemd/system/vps-relay-panel.service /usr/local/bin/vps-relay
+  systemctl disable --now vps-relay-reboot.timer 2>/dev/null || true
+  rm -f /etc/systemd/system/sb-relay.service /etc/systemd/system/vps-relay-panel.service /usr/local/bin/vps-relay \
+    /etc/systemd/system/vps-relay-reboot.service /etc/systemd/system/vps-relay-reboot.timer
   systemctl daemon-reload
   rm -rf "$OPT"
   read -rp "同时删除节点密钥和配置 $ETC ？[y/N] " ans
@@ -106,6 +108,7 @@ EOF
 [Unit]
 Description=vps-relay 管理面板
 After=network-online.target sb-relay.service
+Wants=network-online.target
 
 [Service]
 ExecStart=/usr/bin/env python3 $OPT/panel/app.py serve
