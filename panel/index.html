@@ -152,6 +152,10 @@ function renderNodes() {
 const PRESET_BADGE = {on: ["已启用", "ok"], partial: ["部分启用", "warn"], off: ["未启用", "mute"]};
 
 function renderPresets() {
+  if (!state.presets) {
+    $("#presets").innerHTML = `<div class="node bad">面板后端还是旧版本，没有预设功能。请在 A 机运行 <code>systemctl restart vps-relay-panel</code> 后刷新本页；还不行就重新运行一遍安装命令。</div>`;
+    return;
+  }
   $("#presets").innerHTML = state.presets.map(p => `
     <div class="node"><b>${esc(p.name)}</b> <span class="${PRESET_BADGE[p.status][1]}">${PRESET_BADGE[p.status][0]}</span>
       <span class="mute">${esc(p.desc)}</span>
