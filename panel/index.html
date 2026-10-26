@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>VPS 中转面板</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--fg:#1d2129;--mute:#6b7280;--line:#e5e7eb;--accent:#2563eb;--ok:#16a34a;--bad:#dc2626;--warn:#d97706;--code:#f3f4f6}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1115;--card:#181b21;--fg:#e5e7eb;--mute:#9ca3af;--line:#2a2f37;--accent:#60a5fa;--ok:#4ade80;--bad:#f87171;--warn:#fbbf24;--code:#22262e}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.6 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
+header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;max-width:1080px;margin:0 auto}
+header h1{font-size:18px;margin:0}
+main{max-width:1080px;margin:0 auto;padding:0 16px 40px;display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0}
+.card h2{font-size:15px;margin:0 0 10px}
+.wide{grid-column:1/-1}
+.mute{color:var(--mute);font-size:12px}
+button{background:var(--accent);color:#fff;border:0;border-radius:6px;padding:6px 12px;font:inherit;cursor:pointer}
+button.ghost{background:transparent;color:var(--accent);border:1px solid var(--line)}
+button:disabled{opacity:.5;cursor:wait}
+input,textarea{width:100%;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:7px 9px;font:13px/1.5 ui-monospace,Menlo,Consolas,monospace}
+textarea{min-height:220px;resize:vertical}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.node{border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:10px}
+.node b{font-size:14px}
+.link{word-break:break-all;background:var(--code);padding:6px 8px;border-radius:6px;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;margin:6px 0;max-height:66px;overflow:auto}
+.qr{display:none;background:#fff;padding:8px;width:max-content;border-radius:6px;margin-top:6px}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td{padding:4px 0;border-bottom:1px solid var(--line);vertical-align:top}
+td:first-child{color:var(--mute);width:92px}
+pre{background:var(--code);padding:10px;border-radius:6px;max-height:320px;overflow:auto;font-size:12px;white-space:pre-wrap;word-break:break-all}
+.cols{display:grid;grid-template-columns:2fr 1fr;gap:12px}
+@media (max-width:640px){.cols{grid-template-columns:1fr}}
+#login{max-width:360px;margin:12vh auto;padding:0 16px}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:6px;display:none;max-width:90vw}
+</style>
+</head>
+<body>
+<div id="login" hidden>
+  <div class="card">
+    <h2>VPS 中转面板</h2>
+    <input id="pw" type="password" placeholder="面板密码" autocomplete="current-password">
+    <div class="row"><button id="loginBtn">登录</button><span id="loginErr" class="bad"></span></div>
+  </div>
+</div>
+
+<div id="app" hidden>
+<header><h1 id="title">VPS 中转面板</h1><div class="row" style="margin:0"><button class="ghost" id="pwBtn">改密码</button><button class="ghost" id="logoutBtn">退出</button></div></header>
+<main>
+  <section class="card">
+    <h2>A 机状态</h2>
+    <table id="aStatus"></table>
+    <div class="row"><button class="ghost" id="restartBtn">重新生成配置并重启</button></div>
+  </section>
+
+  <section class="card">
+    <h2>B 机出口</h2>
+    <table id="bStatus"></table>
+    <p class="mute">粘贴 B 机脚本给出的任意一个节点分享链接（推荐 vless reality）。支持 vless / vmess / hysteria2 / tuic / anytls / trojan / ss。</p>
+    <input id="bLink" placeholder="vless://...">
+    <div class="row"><button id="bSave">保存并生效</button></div>
+  </section>
+
+  <section class="card wide">
+    <h2>节点（导入 v2rayN / 小火箭 / HomeProxy）</h2>
+    <div id="nodes"></div>
+  </section>
+
+  <section class="card wide">
+    <h2>智能分流：走 B 机的网站</h2>
+    <p class="mute">只对"智能分流"节点生效。每行一个。域名后缀会同时匹配子域名，例如 <code>google.com</code> 会包含 <code>gemini.google.com</code>。保存后几秒内自动生效，不用重启，客户端也不用更新。</p>
+    <div class="cols">
+      <div><div class="mute">域名后缀</div><textarea id="suffix"></textarea></div>
+      <div><div class="mute">关键词（域名里含有就匹配）</div><textarea id="keyword"></textarea></div>
+    </div>
+    <div class="row">
+      <button id="rulesSave">保存规则</button>
+      <button class="ghost" id="rulesReset">恢复 Gemini 默认列表</button>
+      <input id="matchIn" placeholder="输入网址，看它会不会走 B" style="max-width:280px">
+      <span id="matchOut"></span>
+    </div>
+  </section>
+
+  <section class="card wide">
+    <h2>出口测试（从 A 机发起）</h2>
+    <p class="mute">查看各路径的出口 IP 和 Gemini 访问情况。"强制走 B"应显示 B 机 IP；"智能分流"查 IP 用的 ipinfo.io 不在规则里，所以显示 A 的 IP 是正常的，Gemini 那一行才是经 B 访问的结果。能打开 Gemini 页面不代表一定能登录，最终以客户端实测为准。</p>
+    <div class="row"><button data-via="direct">A 直连</button><button data-via="b">强制走 B</button><button data-via="smart">智能分流（访问 Gemini）</button></div>
+    <table id="testOut" style="margin-top:10px"></table>
+  </section>
+
+  <section class="card wide">
+    <h2>sing-box 日志</h2>
+    <div class="row" style="margin:0 0 8px"><button class="ghost" id="logsBtn">刷新日志</button></div>
+    <pre id="logs">点击刷新查看</pre>
+  </section>
+</main>
+</div>
+<div id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let state = null;
+
+function toast(msg, ms = 2600) { const t = $("#toast"); t.textContent = msg; t.style.display = "block"; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = "none", ms); }
+
+async function api(path, body) {
+  const r = await fetch("api/" + path, body === undefined ? {} : {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+  const j = await r.json().catch(() => ({}));
+  if (r.status === 401) { showLogin(); throw new Error("未登录"); }
+  if (!r.ok) throw new Error(j.error || ("HTTP " + r.status));
+  return j;
+}
+
+async function busy(btn, fn) { btn.disabled = true; try { await fn(); } catch (e) { toast(e.message, 5000); } finally { btn.disabled = false; } }
+
+function showLogin() { $("#app").hidden = true; $("#login").hidden = false; $("#pw").focus(); }
+
+async function login() {
+  $("#loginErr").textContent = "";
+  try { await api("login", {password: $("#pw").value}); $("#pw").value = ""; await boot(); }
+  catch (e) { $("#loginErr").textContent = e.message; }
+}
+
+const NODES = [
+  ["hy2", "节点 1 · Hysteria2", "A 机直连，UDP 协议，速度快"],
+  ["vless", "节点 2 · VLESS Reality", "A 机直连，TCP 协议，稳定"],
+  ["smart", "节点 3 · 智能分流", "下面列表里的网站走 B 机出口，其余从 A 直连"],
+];
+
+function renderNodes() {
+  $("#nodes").innerHTML = NODES.map(([k, name, desc]) => `
+    <div class="node"><b>${name}</b> <span class="mute">端口 ${state.ports[k]} · ${desc}</span>
+      <div class="link" id="l-${k}">${esc(state.links[k])}</div>
+      <div class="row"><button class="ghost" data-copy="${k}">复制链接</button><button class="ghost" data-qr="${k}">二维码</button></div>
+      <div class="qr" id="q-${k}"></div></div>`).join("");
+}
+
+function renderRules() {
+  $("#suffix").value = state.rules.domain_suffix.join("\n");
+  $("#keyword").value = state.rules.domain_keyword.join("\n");
+}
+
+function fmtUptime(s) { const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600); return (d ? d + " 天 " : "") + h + " 小时"; }
+
+async function refreshStatus() {
+  const s = await api("status");
+  const a = s.a;
+  $("#aStatus").innerHTML = `
+    <tr><td>sing-box</td><td><span class="dot" style="background:var(--${a.service ? "ok" : "bad"})"></span>${a.service ? "运行中" : "未运行"}</td></tr>
+    <tr><td>IP</td><td>${esc(state.server_ip)}</td></tr>
+    <tr><td>负载</td><td>${esc((a.load || []).join(" / "))}</td></tr>
+    <tr><td>内存</td><td>${a.mem_used ?? "?"} / ${a.mem_total ?? "?"} MB</td></tr>
+    <tr><td>已运行</td><td>${a.uptime ? fmtUptime(a.uptime) : "?"}</td></tr>`;
+  const b = s.b;
+  if (!b.configured) { $("#bStatus").innerHTML = `<tr><td>状态</td><td class="warn">未设置，智能分流节点目前全部从 A 直连</td></tr>`; return; }
+  let lat;
+  if (b.latency) {
+    const ok = b.latency.filter(x => x !== null);
+    lat = ok.length ? `<span class="${ok.length === b.latency.length ? "ok" : "warn"}">${ok.map(x => x + " ms").join(" / ")}</span>${ok.length < b.latency.length ? " (有丢包)" : ""}` : `<span class="bad">连不上</span>`;
+  } else lat = `<span class="mute">${esc(b.note)}</span>`;
+  $("#bStatus").innerHTML = `
+    <tr><td>协议</td><td>${esc(b.type)}</td></tr>
+    <tr><td>地址</td><td>${esc(b.server)}:${b.port}</td></tr>
+    <tr><td>A→B 延迟</td><td>${lat}</td></tr>`;
+}
+
+function matches(host) {
+  host = host.trim().toLowerCase().replace(/^https?:\/\//, "").split(/[\/:?#]/)[0];
+  if (!host) return null;
+  const suf = $("#suffix").value.split("\n").map(x => x.trim().toLowerCase()).filter(Boolean);
+  const kw = $("#keyword").value.split("\n").map(x => x.trim().toLowerCase()).filter(Boolean);
+  const s = suf.find(x => host === x || host.endsWith("." + x));
+  if (s) return `<span class="ok">走 B（后缀 ${esc(s)}）</span>`;
+  const k = kw.find(x => host.includes(x));
+  if (k) return `<span class="ok">走 B（关键词 ${esc(k)}）</span>`;
+  return `<span class="mute">A 直连</span>`;
+}
+
+async function runTest(via, btn) {
+  await busy(btn, async () => {
+    const names = {direct: "A 直连", b: "强制走 B", smart: "智能分流"};
+    const r = await api("test", {via});
+    const g = r.gemini;
+    const gtxt = g.error ? `<span class="bad">失败：${esc(g.error)}</span>` : `<span class="${g.status === 200 ? "ok" : "warn"}">HTTP ${g.status}</span>，${g.ms} ms<br><span class="mute">${esc(g.url)}</span>`;
+    const ip = r.ip ? `${esc(r.ip)} · ${esc(r.country)} ${esc(r.city || "")} · ${esc(r.org || "")}` : `<span class="bad">${esc(r.ip_error)}</span>`;
+    const row = `<tr data-row="${via}"><td>${names[via]}</td><td>出口 IP：${ip}<br>Gemini：${gtxt}</td></tr>`;
+    const old = document.querySelector(`tr[data-row="${via}"]`);
+    if (old) old.outerHTML = row; else $("#testOut").insertAdjacentHTML("beforeend", row);
+  });
+}
+
+async function boot() {
+  state = await api("state");
+  $("#login").hidden = true; $("#app").hidden = false;
+  $("#title").textContent = state.name + " 中转面板";
+  renderNodes(); renderRules();
+  refreshStatus().catch(e => toast(e.message));
+}
+
+$("#loginBtn").onclick = login;
+$("#pw").onkeydown = e => { if (e.key === "Enter") login(); };
+$("#logoutBtn").onclick = async () => { await api("logout", {}); showLogin(); };
+$("#pwBtn").onclick = async () => {
+  const old = prompt("原密码"); if (old === null) return;
+  const nw = prompt("新密码（至少 8 位）"); if (nw === null) return;
+  try { await api("password", {old, new: nw}); toast("已修改，请重新登录"); showLogin(); } catch (e) { toast(e.message, 5000); }
+};
+$("#nodes").onclick = async e => {
+  const c = e.target.dataset.copy, q = e.target.dataset.qr;
+  if (c) { try { await navigator.clipboard.writeText(state.links[c]); toast("已复制"); } catch { const r = document.createRange(); r.selectNodeContents($("#l-" + c)); getSelection().removeAllRanges(); getSelection().addRange(r); toast("请手动复制已选中的链接"); } }
+  if (q) {
+    const box = $("#q-" + q);
+    if (box.style.display === "block") { box.style.display = "none"; return; }
+    box.innerHTML = ""; box.style.display = "block";
+    if (window.QRCode) new QRCode(box, {text: state.links[q], width: 200, height: 200, correctLevel: QRCode.CorrectLevel.L});
+    else box.textContent = "二维码库加载失败，请复制链接";
+  }
+};
+$("#bSave").onclick = e => busy(e.target, async () => {
+  const r = await api("upstream", {link: $("#bLink").value});
+  toast(r.message); $("#bLink").value = ""; state = await api("state"); await refreshStatus();
+});
+$("#rulesSave").onclick = e => busy(e.target, async () => {
+  const lines = id => $(id).value.split("\n").map(x => x.trim()).filter(Boolean);
+  const r = await api("rules", {domain_suffix: lines("#suffix"), domain_keyword: lines("#keyword")});
+  state.rules = r.rules; renderRules(); toast("规则已保存，几秒内生效");
+});
+$("#rulesReset").onclick = e => { if (confirm("用默认的 Gemini 域名列表覆盖当前规则？")) busy(e.target, async () => { const r = await api("rules/reset", {}); state.rules = r.rules; renderRules(); toast("已恢复默认"); }); };
+$("#matchIn").oninput = () => { $("#matchOut").innerHTML = matches($("#matchIn").value) || ""; };
+document.querySelectorAll("button[data-via]").forEach(b => b.onclick = () => runTest(b.dataset.via, b));
+$("#restartBtn").onclick = e => { if (confirm("重启会让正在使用的连接断开几秒，确定？")) busy(e.target, async () => { const r = await api("restart", {}); toast(r.message); await refreshStatus(); }); };
+$("#logsBtn").onclick = e => busy(e.target, async () => { const r = await api("logs"); $("#logs").textContent = r.logs || "（无日志）"; });
+
+boot().catch(() => showLogin());
+setInterval(() => { if (!$("#app").hidden) refreshStatus().catch(() => {}); }, 30000);
+</script>
+</body>
+</html>
