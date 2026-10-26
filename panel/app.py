@@ -59,6 +59,29 @@ DEFAULT_SUFFIXES = [
 ]
 DEFAULT_KEYWORDS = []
 
+# 一键预设：每组是一批域名后缀，面板里可以一键添加或删除
+PRESETS = [
+    {"id": "gemini", "name": "Gemini / Google AI",
+     "desc": "Gemini、AI Studio、NotebookLM 等（安装时默认已启用）", "suffix": DEFAULT_SUFFIXES},
+    {"id": "chatgpt", "name": "ChatGPT / OpenAI",
+     "desc": "ChatGPT 网页和 App、OpenAI API、Sora",
+     "suffix": ["openai.com", "chatgpt.com", "chat.com", "oaistatic.com", "oaiusercontent.com",
+                "sora.com", "openaiapi-site.azureedge.net", "featuregates.org"]},
+    {"id": "claude", "name": "Claude / Anthropic",
+     "desc": "Claude 网页、桌面版和 App、Anthropic API",
+     "suffix": ["claude.ai", "claude.com", "anthropic.com", "claudeusercontent.com", "clau.de"]},
+]
+
+
+def preset_status(state):
+    have = set(state["rules"]["domain_suffix"])
+    out = []
+    for p in PRESETS:
+        n = sum(1 for d in p["suffix"] if d in have)
+        status = "on" if n == len(p["suffix"]) else ("partial" if n else "off")
+        out.append({"id": p["id"], "name": p["name"], "desc": p["desc"], "domains": p["suffix"], "status": status})
+    return out
+
 lock = threading.Lock()
 
 
@@ -648,6 +671,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "name": state.get("name", "A"),
                 "server_ip": state["server_ip"],
                 "rules": state["rules"],
+                "presets": preset_status(state),
                 "upstream": {"link_type": up["outbound"]["type"], "server": up["outbound"]["server"],
                              "port": up["outbound"]["server_port"]} if up else None,
                 "links": node_links(state),
@@ -702,14 +726,29 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     backup(RULES)
                     save_state(state)
                     write_rules(state)  # sing-box 会自动重新加载本地规则集，无需重启
-                self._send(200, {"ok": True, "rules": state["rules"]})
+                self._send(200, {"ok": True, "rules": state["rules"], "presets": preset_status(state)})
+            elif sub == "/api/preset":
+                preset = next((p for p in PRESETS if p["id"] == data.get("id")), None)
+                if preset is None or data.get("action") not in ("add", "remove"):
+                    raise ValueError("参数错误")
+                with lock:
+                    state = load_state()
+                    cur = state["rules"]["domain_suffix"]
+                    if data["action"] == "add":
+                        state["rules"]["domain_suffix"] = cur + [d for d in preset["suffix"] if d not in cur]
+                    else:
+                        state["rules"]["domain_suffix"] = [d for d in cur if d not in preset["suffix"]]
+                    backup(RULES)
+                    save_state(state)
+                    write_rules(state)
+                self._send(200, {"ok": True, "rules": state["rules"], "presets": preset_status(state)})
             elif sub == "/api/rules/reset":
                 with lock:
                     state = load_state()
                     state["rules"] = {"domain_suffix": list(DEFAULT_SUFFIXES), "domain_keyword": list(DEFAULT_KEYWORDS)}
                     save_state(state)
                     write_rules(state)
-                self._send(200, {"ok": True, "rules": state["rules"]})
+                self._send(200, {"ok": True, "rules": state["rules"], "presets": preset_status(state)})
             elif sub == "/api/upstream":
                 with lock:
                     state = load_state()

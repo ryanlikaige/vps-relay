@@ -74,6 +74,9 @@ pre{background:var(--code);padding:10px;border-radius:6px;max-height:320px;overf
   <section class="card wide">
     <h2>智能分流：走 B 机的网站</h2>
     <p class="mute">只对两个"智能分流"节点（节点 3、4）生效。每行一个。域名后缀会同时匹配子域名，例如 <code>google.com</code> 会包含 <code>gemini.google.com</code>。保存后几秒内自动生效，不用重启，客户端也不用更新。</p>
+    <h2 style="font-size:14px;margin:12px 0 6px">一键预设</h2>
+    <p class="mute">点"添加"立即生效，点"删除"立即移除这一组的全部域名，不影响其他域名。</p>
+    <div id="presets"></div>
     <div class="cols">
       <div><div class="mute">域名后缀</div><textarea id="suffix"></textarea></div>
       <div><div class="mute">关键词（域名里含有就匹配）</div><textarea id="keyword"></textarea></div>
@@ -146,7 +149,24 @@ function renderNodes() {
       <div class="qr" id="q-${k}"></div></div>`).join("");
 }
 
+const PRESET_BADGE = {on: ["已启用", "ok"], partial: ["部分启用", "warn"], off: ["未启用", "mute"]};
+
+function renderPresets() {
+  $("#presets").innerHTML = state.presets.map(p => `
+    <div class="node"><b>${esc(p.name)}</b> <span class="${PRESET_BADGE[p.status][1]}">${PRESET_BADGE[p.status][0]}</span>
+      <span class="mute">${esc(p.desc)}</span>
+      <details><summary class="mute" style="cursor:pointer">包含 ${p.domains.length} 个域名</summary><div class="link">${esc(p.domains.join("\n"))}</div></details>
+      <div class="row"><button data-preset="${esc(p.id)}" data-act="add"${p.status === "on" ? " disabled" : ""}>一键添加</button>
+      <button class="ghost" data-preset="${esc(p.id)}" data-act="remove"${p.status === "off" ? " disabled" : ""}>一键删除</button></div></div>`).join("");
+}
+
+function rulesDirty() {
+  const lines = id => $(id).value.split("\n").map(x => x.trim()).filter(Boolean).join("\n");
+  return lines("#suffix") !== state.rules.domain_suffix.join("\n") || lines("#keyword") !== state.rules.domain_keyword.join("\n");
+}
+
 function renderRules() {
+  renderPresets();
   $("#suffix").value = state.rules.domain_suffix.join("\n");
   $("#keyword").value = state.rules.domain_keyword.join("\n");
 }
@@ -234,9 +254,18 @@ $("#bSave").onclick = e => busy(e.target, async () => {
 $("#rulesSave").onclick = e => busy(e.target, async () => {
   const lines = id => $(id).value.split("\n").map(x => x.trim()).filter(Boolean);
   const r = await api("rules", {domain_suffix: lines("#suffix"), domain_keyword: lines("#keyword")});
-  state.rules = r.rules; renderRules(); toast("规则已保存，几秒内生效");
+  state.rules = r.rules; state.presets = r.presets; renderRules(); toast("规则已保存，几秒内生效");
 });
-$("#rulesReset").onclick = e => { if (confirm("用默认的 Gemini 域名列表覆盖当前规则？")) busy(e.target, async () => { const r = await api("rules/reset", {}); state.rules = r.rules; renderRules(); toast("已恢复默认"); }); };
+$("#presets").onclick = e => {
+  const b = e.target.closest("button[data-preset]"); if (!b || b.disabled) return;
+  if (rulesDirty() && !confirm("下面的文本框有还没保存的修改，继续会丢掉这些修改，确定？")) return;
+  busy(b, async () => {
+    const r = await api("preset", {id: b.dataset.preset, action: b.dataset.act});
+    state.rules = r.rules; state.presets = r.presets; renderRules();
+    toast(b.dataset.act === "add" ? "已添加，几秒内生效" : "已删除，几秒内生效");
+  });
+};
+$("#rulesReset").onclick = e => { if (confirm("用默认的 Gemini 域名列表覆盖当前规则？")) busy(e.target, async () => { const r = await api("rules/reset", {}); state.rules = r.rules; state.presets = r.presets; renderRules(); toast("已恢复默认"); }); };
 $("#matchIn").oninput = () => { $("#matchOut").innerHTML = matches($("#matchIn").value) || ""; };
 document.querySelectorAll("button[data-via]").forEach(b => b.onclick = () => runTest(b.dataset.via, b));
 $("#restartBtn").onclick = e => { if (confirm("重启会让正在使用的连接断开几秒，确定？")) busy(e.target, async () => { const r = await api("restart", {}); toast(r.message); await refreshStatus(); }); };
