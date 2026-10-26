@@ -56,7 +56,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/ryanlikaige/vps-relay/main/i
 ## 面板功能
 
 - 增删走 B 的网站（域名后缀 / 关键词），保存后几秒内生效，不用重启，客户端也不用更新
-- 一键预设：Gemini / ChatGPT / Claude / Meta AI / Grok 五组域名，新安装默认都不启用，需要手动点"一键添加"，也可以"一键删除"
+- 一键预设：Gemini / ChatGPT / Claude / Meta AI / Grok，以及 Facebook 全家桶、X 全站 共七组域名，新安装默认都不启用，需要手动点"一键添加"，也可以"一键删除"
 - 输入网址查看它会不会走 B
 - B 机出口：粘贴分享链接即可，支持 vless / vmess / hysteria2 / tuic / anytls / trojan / ss
 - A 机状态、A→B 延迟

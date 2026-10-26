@@ -71,11 +71,19 @@ PRESETS = [
      "desc": "Claude 网页、桌面版和 App、Anthropic API",
      "suffix": ["claude.ai", "claude.com", "anthropic.com", "claudeusercontent.com", "clau.de"]},
     {"id": "meta", "name": "Meta AI",
-     "desc": "meta.ai 网页版和 Llama 官网（Facebook、Instagram 里的 Meta AI 和主站共用域名，没法单独分流）",
+     "desc": "meta.ai 网页版和 Llama 官网（Facebook、Instagram 里的 Meta AI 要再加下面的全站组）",
      "suffix": ["meta.ai", "ai.meta.com", "llama.com"]},
+    {"id": "meta_all", "name": "Facebook / Instagram / WhatsApp 全站",
+     "desc": "整个 Meta 旗下网站和 App 都走 B，流量大（含视频），B 晚高峰慢时会受影响",
+     "suffix": ["facebook.com", "fb.com", "fb.me", "fbcdn.net", "facebook.net", "fbsbx.com", "messenger.com",
+                "instagram.com", "cdninstagram.com", "threads.net", "threads.com",
+                "whatsapp.com", "whatsapp.net"]},
     {"id": "grok", "name": "Grok / xAI",
-     "desc": "grok.com 和 xAI API（X 网站里的 Grok 和 X 共用域名，没法单独分流）",
+     "desc": "grok.com 和 xAI API（X 网站里的 Grok 要再加下面的全站组）",
      "suffix": ["grok.com", "x.ai"]},
+    {"id": "x_all", "name": "X (Twitter) 全站",
+     "desc": "整个 X 网站和 App 都走 B，流量大（含视频），B 晚高峰慢时会受影响",
+     "suffix": ["x.com", "twitter.com", "twimg.com", "t.co"]},
 ]
 
 
