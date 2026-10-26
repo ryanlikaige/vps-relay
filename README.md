@@ -8,7 +8,7 @@ A 机提供四个节点：
 | --- | --- | --- |
 | 节点 1 | Hysteria2 (UDP) | 全部从 A 直连 |
 | 节点 2 | VLESS Reality (TCP) | 全部从 A 直连 |
-| 节点 3 | VLESS Reality (TCP) | **智能分流**：列表里的网站（默认是 Gemini）转到 B 机出口，其余从 A 直连 |
+| 节点 3 | VLESS Reality (TCP) | **智能分流**：规则列表里的网站转到 B 机出口，其余从 A 直连（新安装默认列表为空，要在面板里手动添加） |
 | 节点 4 | Hysteria2 (UDP) | **智能分流**，规则同节点 3 |
 
 ```
@@ -35,8 +35,9 @@ bash <(curl -fsSL https://raw.githubusercontent.com/ryanlikaige/vps-relay/main/i
 
 1. 打开面板，在"B 机出口"里粘贴 B 机的任意一个节点分享链接（推荐 vless reality，在 B 机上运行 `sb` 查看节点信息即可拿到），保存。
 2. 把四个节点的链接或二维码导入 v2rayN、小火箭、HomeProxy。
-3. 在面板的"出口测试"里点"强制走 B"，确认出口 IP 是 B 机的。
-4. 客户端选"智能分流"节点，打开 Gemini 实测。
+3. 在面板的"一键预设"里点 Gemini 的"一键添加"（默认不启用任何分流）。
+4. 在面板的"出口测试"里点"强制走 B"，确认出口 IP 是 B 机的。
+5. 客户端选"智能分流"节点，打开 Gemini 实测。
 
 如果服务商有安全组/防火墙，需要放行：面板端口(TCP)、节点 2 和节点 3 的端口(TCP)、节点 1 和节点 4 的端口(UDP)、80 端口(TCP，配域名时申请证书用)。脚本会自动放行 ufw/firewalld。
 
@@ -55,7 +56,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/ryanlikaige/vps-relay/main/i
 ## 面板功能
 
 - 增删走 B 的网站（域名后缀 / 关键词），保存后几秒内生效，不用重启，客户端也不用更新
-- 一键预设：Gemini / ChatGPT / Claude 三组域名，默认只启用 Gemini，其余需要手动点"一键添加"，也可以"一键删除"
+- 一键预设：Gemini / ChatGPT / Claude 三组域名，新安装默认都不启用，需要手动点"一键添加"，也可以"一键删除"
 - 输入网址查看它会不会走 B
 - B 机出口：粘贴分享链接即可，支持 vless / vmess / hysteria2 / tuic / anytls / trojan / ss
 - A 机状态、A→B 延迟
@@ -101,4 +102,4 @@ bash install.sh uninstall   # 卸载
 
 ## 关于 Gemini 域名
 
-默认列表包含 Gemini、AI Studio、NotebookLM 等相关域名。如果走智能分流节点仍然提示地区不支持，可以在面板里加上 `google.com` 和 `googleapis.com`（让整个 Google 都走 B），或者加 `accounts.google.com` 让登录也走 B。
+Gemini 预设包含 Gemini、AI Studio、NotebookLM 等相关域名。如果启用后走智能分流节点仍然提示地区不支持，可以在面板里手动加上 `google.com` 和 `googleapis.com`（让整个 Google 都走 B），或者加 `accounts.google.com` 让登录也走 B。

@@ -62,7 +62,7 @@ DEFAULT_KEYWORDS = []
 # 一键预设：每组是一批域名后缀，面板里可以一键添加或删除
 PRESETS = [
     {"id": "gemini", "name": "Gemini / Google AI",
-     "desc": "Gemini、AI Studio、NotebookLM 等（安装时默认已启用）", "suffix": DEFAULT_SUFFIXES},
+     "desc": "Gemini、AI Studio、NotebookLM 等", "suffix": DEFAULT_SUFFIXES},
     {"id": "chatgpt", "name": "ChatGPT / OpenAI",
      "desc": "ChatGPT 网页和 App、OpenAI API、Sora",
      "suffix": ["openai.com", "chatgpt.com", "chat.com", "oaistatic.com", "oaiusercontent.com",
@@ -745,7 +745,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             elif sub == "/api/rules/reset":
                 with lock:
                     state = load_state()
-                    state["rules"] = {"domain_suffix": list(DEFAULT_SUFFIXES), "domain_keyword": list(DEFAULT_KEYWORDS)}
+                    state["rules"] = {"domain_suffix": [], "domain_keyword": []}
                     save_state(state)
                     write_rules(state)
                 self._send(200, {"ok": True, "rules": state["rules"], "presets": preset_status(state)})
@@ -884,7 +884,7 @@ def cmd_init():
             "smart_hy2": {"port": pick_port("SMART_HY2_PORT", used), "password": secrets.token_urlsafe(16)},
         },
         "probe": {"b": pick_port("", used), "smart": pick_port("", used)},
-        "rules": {"domain_suffix": list(DEFAULT_SUFFIXES), "domain_keyword": list(DEFAULT_KEYWORDS)},
+        "rules": {"domain_suffix": [], "domain_keyword": []},  # 默认不分流，需要在面板里手动添加预设
         "upstream": None,
     }
     self_signed("hy2", "www.bing.com")

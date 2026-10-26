@@ -75,7 +75,7 @@ pre{background:var(--code);padding:10px;border-radius:6px;max-height:320px;overf
     <h2>智能分流：走 B 机的网站</h2>
     <p class="mute">只对两个"智能分流"节点（节点 3、4）生效。每行一个。域名后缀会同时匹配子域名，例如 <code>google.com</code> 会包含 <code>gemini.google.com</code>。保存后几秒内自动生效，不用重启，客户端也不用更新。</p>
     <h2 style="font-size:14px;margin:12px 0 6px">一键预设</h2>
-    <p class="mute">点"添加"立即生效，点"删除"立即移除这一组的全部域名，不影响其他域名。</p>
+    <p class="mute">新安装默认一组都没启用，需要你手动点"一键添加"才会生效；点"一键删除"立即移除这一组的全部域名，不影响其他域名。</p>
     <div id="presets"></div>
     <div class="cols">
       <div><div class="mute">域名后缀</div><textarea id="suffix"></textarea></div>
@@ -83,7 +83,7 @@ pre{background:var(--code);padding:10px;border-radius:6px;max-height:320px;overf
     </div>
     <div class="row">
       <button id="rulesSave">保存规则</button>
-      <button class="ghost" id="rulesReset">恢复 Gemini 默认列表</button>
+      <button class="ghost" id="rulesReset">清空全部规则</button>
       <input id="matchIn" placeholder="输入网址，看它会不会走 B" style="max-width:280px">
       <span id="matchOut"></span>
     </div>
@@ -265,7 +265,7 @@ $("#presets").onclick = e => {
     toast(b.dataset.act === "add" ? "已添加，几秒内生效" : "已删除，几秒内生效");
   });
 };
-$("#rulesReset").onclick = e => { if (confirm("用默认的 Gemini 域名列表覆盖当前规则？")) busy(e.target, async () => { const r = await api("rules/reset", {}); state.rules = r.rules; state.presets = r.presets; renderRules(); toast("已恢复默认"); }); };
+$("#rulesReset").onclick = e => { if (confirm("清空全部规则？智能分流节点会变成和直连节点一样，所有网站都从 A 出去。")) busy(e.target, async () => { const r = await api("rules/reset", {}); state.rules = r.rules; state.presets = r.presets; renderRules(); toast("已清空"); }); };
 $("#matchIn").oninput = () => { $("#matchOut").innerHTML = matches($("#matchIn").value) || ""; };
 document.querySelectorAll("button[data-via]").forEach(b => b.onclick = () => runTest(b.dataset.via, b));
 $("#restartBtn").onclick = e => { if (confirm("重启会让正在使用的连接断开几秒，确定？")) busy(e.target, async () => { const r = await api("restart", {}); toast(r.message); await refreshStatus(); }); };
