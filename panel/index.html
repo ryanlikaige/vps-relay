@@ -209,27 +209,20 @@ function renderPresets() {
   $("#presets").innerHTML = state.presets.map(p => `
     <div class="node"><b>${esc(p.name)}</b> <span class="${PRESET_BADGE[p.status][1]}">${PRESET_BADGE[p.status][0]}</span>
       <span class="mute">${esc(p.desc)}</span>
-      <details><summary class="mute" style="cursor:pointer">包含 ${p.domains.length} 个域名</summary><div class="link">${esc(p.domains.join("
-"))}</div></details>
+      <details><summary class="mute" style="cursor:pointer">包含 ${p.domains.length} 个域名</summary><div class="link">${esc(p.domains.join("\n"))}</div></details>
       <div class="row"><button data-preset="${esc(p.id)}" data-act="add"${p.status === "on" ? " disabled" : ""}>一键添加</button>
       <button class="ghost" data-preset="${esc(p.id)}" data-act="remove"${p.status === "off" ? " disabled" : ""}>一键删除</button></div></div>`).join("");
 }
 
 function rulesDirty() {
-  const lines = id => $(id).value.split("
-").map(x => x.trim()).filter(Boolean).join("
-");
-  return lines("#suffix") !== state.rules.domain_suffix.join("
-") || lines("#keyword") !== state.rules.domain_keyword.join("
-");
+  const lines = id => $(id).value.split("\n").map(x => x.trim()).filter(Boolean).join("\n");
+  return lines("#suffix") !== state.rules.domain_suffix.join("\n") || lines("#keyword") !== state.rules.domain_keyword.join("\n");
 }
 
 function renderRules() {
   renderPresets();
-  $("#suffix").value = state.rules.domain_suffix.join("
-");
-  $("#keyword").value = state.rules.domain_keyword.join("
-");
+  $("#suffix").value = state.rules.domain_suffix.join("\n");
+  $("#keyword").value = state.rules.domain_keyword.join("\n");
 }
 
 function fmtUptime(s) { const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600); return (d ? d + " 天 " : "") + h + " 小时"; }
@@ -259,10 +252,8 @@ async function refreshStatus() {
 function matches(host) {
   host = host.trim().toLowerCase().replace(/^https?:\/\//, "").split(/[\/:?#]/)[0];
   if (!host) return null;
-  const suf = $("#suffix").value.split("
-").map(x => x.trim().toLowerCase()).filter(Boolean);
-  const kw = $("#keyword").value.split("
-").map(x => x.trim().toLowerCase()).filter(Boolean);
+  const suf = $("#suffix").value.split("\n").map(x => x.trim().toLowerCase()).filter(Boolean);
+  const kw = $("#keyword").value.split("\n").map(x => x.trim().toLowerCase()).filter(Boolean);
   const s = suf.find(x => host === x || host.endsWith("." + x));
   if (s) return `<span class="ok">走静态 ISP / B（后缀 ${esc(s)}）</span>`;
   const k = kw.find(x => host.includes(x));
@@ -387,8 +378,7 @@ $("#bSave").onclick = e => busy(e.target, async () => {
   toast(r.message); $("#bLink").value = ""; state = await api("state"); syncIspFields(); await refreshStatus();
 });
 $("#rulesSave").onclick = e => busy(e.target, async () => {
-  const lines = id => $(id).value.split("
-").map(x => x.trim()).filter(Boolean);
+  const lines = id => $(id).value.split("\n").map(x => x.trim()).filter(Boolean);
   const r = await api("rules", {domain_suffix: lines("#suffix"), domain_keyword: lines("#keyword")});
   state.rules = r.rules; state.presets = r.presets; renderRules(); toast("规则已保存，几秒内生效");
 });
