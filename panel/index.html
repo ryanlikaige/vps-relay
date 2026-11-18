@@ -11,10 +11,11 @@
 @media (prefers-color-scheme:dark){:root{--bg:#0f1115;--card:#181b21;--fg:#e5e7eb;--mute:#9ca3af;--line:#2a2f37;--accent:#60a5fa;--ok:#4ade80;--bad:#f87171;--warn:#fbbf24;--code:#22262e}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.6 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;max-width:1080px;margin:0 auto}
+header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;max-width:1160px;margin:0 auto}
 header h1{font-size:18px;margin:0}
-main{max-width:1080px;margin:0 auto;padding:0 16px 40px;display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
-.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0}
+main{max-width:1160px;margin:0 auto;padding:0 16px 40px;display:grid;gap:16px;grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:920px){main{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0;display:flex;flex-direction:column}
 .card h2{font-size:15px;margin:0 0 10px}
 .wide{grid-column:1/-1}
 .mute{color:var(--mute);font-size:12px}
@@ -23,8 +24,10 @@ button.ghost{background:transparent;color:var(--accent);border:1px solid var(--l
 button:disabled{opacity:.5;cursor:wait}
 input,textarea,select{width:100%;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:7px 9px;font:13px/1.5 ui-monospace,Menlo,Consolas,monospace}
 textarea{min-height:220px;resize:vertical}
-.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.field{display:flex;flex-direction:column;gap:3px}
+.field span{color:var(--mute);font-size:11px}
 .node{border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:10px}
 .node b{font-size:14px}
 .link{word-break:break-all;background:var(--code);padding:6px 8px;border-radius:6px;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;margin:6px 0;max-height:66px;overflow:auto}
@@ -33,12 +36,12 @@ textarea{min-height:220px;resize:vertical}
 .ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}
 table{width:100%;border-collapse:collapse;font-size:13px}
 td{padding:4px 0;border-bottom:1px solid var(--line);vertical-align:top}
-td:first-child{color:var(--mute);width:92px}
+td:first-child{color:var(--mute);width:88px}
 pre{background:var(--code);padding:10px;border-radius:6px;max-height:320px;overflow:auto;font-size:12px;white-space:pre-wrap;word-break:break-all}
 .cols{display:grid;grid-template-columns:2fr 1fr;gap:12px}
 @media (max-width:640px){.cols,.grid2{grid-template-columns:1fr}}
 #login{max-width:360px;margin:12vh auto;padding:0 16px}
-#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:6px;display:none;max-width:90vw}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:6px;display:none;max-width:90vw;z-index:99}
 </style>
 </head>
 <body>
@@ -56,25 +59,48 @@ pre{background:var(--code);padding:10px;border-radius:6px;max-height:320px;overf
   <section class="card">
     <h2>A 机状态</h2>
     <table id="aStatus"></table>
-    <div class="row"><button class="ghost" id="restartBtn">重新生成配置并重启</button></div>
+    <div class="row" style="margin-top:auto;padding-top:10px"><button class="ghost" id="restartBtn">重新生成配置并重启</button></div>
   </section>
 
   <section class="card">
-    <h2>静态 ISP / B 机出口</h2>
+    <h2>当前出口状态 / 节点链接</h2>
     <table id="bStatus"></table>
-    <p class="mute">支持直接粘贴 Proxy-Seller 导出的 <code>IP:SOCKS5端口:用户名:密码</code>、<code>socks5://...</code>、<code>http://...</code>，或任意节点分享链接（vless / hy2 等）。</p>
-    <input id="bLink" placeholder="例如 1.2.3.4:50100:user:pass 或 socks5://...">
-    <details style="margin-top:8px">
-      <summary class="mute" style="cursor:pointer">分项填写 Proxy-Seller 静态 ISP 参数</summary>
-      <div class="grid2">
+    <p class="mute" style="margin:8px 0 6px">也可在此直接粘贴一行代理串（<code>IP:端口:用户:密码</code>）或 B 机节点分享链接（<code>vless://</code> / <code>hy2://</code> 等）：</p>
+    <input id="bLink" placeholder="vless://... 或 1.2.3.4:50100:user:pass">
+    <div class="row" style="margin-top:auto;padding-top:10px"><button id="bSave">保存链接并生效</button></div>
+  </section>
+
+  <section class="card">
+    <h2>Proxy-Seller 静态 ISP 参数</h2>
+    <p class="mute" style="margin:0 0 6px">分项填写静态住宅 ISP 账密（在 IP 框直接粘贴 <code>IP:端口:用户:密码</code> 可自动拆分填充）：</p>
+    <div class="grid2">
+      <div class="field">
+        <span>协议类型</span>
         <select id="ispProto"><option value="socks5">SOCKS5（推荐）</option><option value="http">HTTP</option></select>
-        <input id="ispHost" placeholder="代理 IP 地址">
-        <input id="ispPort" placeholder="端口（如 50100）">
-        <input id="ispUser" placeholder="用户名（留空表示IP白名单）">
-        <input id="ispPass" placeholder="密码">
       </div>
-    </details>
-    <div class="row"><button id="bSave">保存并生效</button></div>
+      <div class="field">
+        <span>端口</span>
+        <input id="ispPort" placeholder="如 50100">
+      </div>
+    </div>
+    <div class="field" style="margin-top:8px">
+      <span>代理 IP 地址</span>
+      <input id="ispHost" placeholder="如 1.2.3.4（或直接粘贴四段式）">
+    </div>
+    <div class="grid2">
+      <div class="field">
+        <span>用户名（白名单可留空）</span>
+        <input id="ispUser" placeholder="Proxy-Seller 用户名">
+      </div>
+      <div class="field">
+        <span>密码</span>
+        <input id="ispPass" type="password" placeholder="Proxy-Seller 密码">
+      </div>
+    </div>
+    <div class="row" style="margin-top:auto;padding-top:10px">
+      <button id="ispSave">保存静态 ISP 并生效</button>
+      <button class="ghost" id="ispClear" type="button">清空表单</button>
+    </div>
   </section>
 
   <section class="card wide">
@@ -183,20 +209,27 @@ function renderPresets() {
   $("#presets").innerHTML = state.presets.map(p => `
     <div class="node"><b>${esc(p.name)}</b> <span class="${PRESET_BADGE[p.status][1]}">${PRESET_BADGE[p.status][0]}</span>
       <span class="mute">${esc(p.desc)}</span>
-      <details><summary class="mute" style="cursor:pointer">包含 ${p.domains.length} 个域名</summary><div class="link">${esc(p.domains.join("\n"))}</div></details>
+      <details><summary class="mute" style="cursor:pointer">包含 ${p.domains.length} 个域名</summary><div class="link">${esc(p.domains.join("
+"))}</div></details>
       <div class="row"><button data-preset="${esc(p.id)}" data-act="add"${p.status === "on" ? " disabled" : ""}>一键添加</button>
       <button class="ghost" data-preset="${esc(p.id)}" data-act="remove"${p.status === "off" ? " disabled" : ""}>一键删除</button></div></div>`).join("");
 }
 
 function rulesDirty() {
-  const lines = id => $(id).value.split("\n").map(x => x.trim()).filter(Boolean).join("\n");
-  return lines("#suffix") !== state.rules.domain_suffix.join("\n") || lines("#keyword") !== state.rules.domain_keyword.join("\n");
+  const lines = id => $(id).value.split("
+").map(x => x.trim()).filter(Boolean).join("
+");
+  return lines("#suffix") !== state.rules.domain_suffix.join("
+") || lines("#keyword") !== state.rules.domain_keyword.join("
+");
 }
 
 function renderRules() {
   renderPresets();
-  $("#suffix").value = state.rules.domain_suffix.join("\n");
-  $("#keyword").value = state.rules.domain_keyword.join("\n");
+  $("#suffix").value = state.rules.domain_suffix.join("
+");
+  $("#keyword").value = state.rules.domain_keyword.join("
+");
 }
 
 function fmtUptime(s) { const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600); return (d ? d + " 天 " : "") + h + " 小时"; }
@@ -226,8 +259,10 @@ async function refreshStatus() {
 function matches(host) {
   host = host.trim().toLowerCase().replace(/^https?:\/\//, "").split(/[\/:?#]/)[0];
   if (!host) return null;
-  const suf = $("#suffix").value.split("\n").map(x => x.trim().toLowerCase()).filter(Boolean);
-  const kw = $("#keyword").value.split("\n").map(x => x.trim().toLowerCase()).filter(Boolean);
+  const suf = $("#suffix").value.split("
+").map(x => x.trim().toLowerCase()).filter(Boolean);
+  const kw = $("#keyword").value.split("
+").map(x => x.trim().toLowerCase()).filter(Boolean);
   const s = suf.find(x => host === x || host.endsWith("." + x));
   if (s) return `<span class="ok">走静态 ISP / B（后缀 ${esc(s)}）</span>`;
   const k = kw.find(x => host.includes(x));
@@ -256,10 +291,43 @@ async function runTest(via, btn) {
   });
 }
 
+function syncIspFields() {
+  if (!state.upstream) return;
+  $("#ispHost").value = state.upstream.server || "";
+  $("#ispPort").value = state.upstream.port || "";
+  $("#ispUser").value = state.upstream.username || "";
+  $("#ispProto").value = state.upstream.link_type === "http" ? "http" : "socks5";
+  if (state.upstream.username) {
+    $("#ispPass").placeholder = "已保存（如需更改请重新输入）";
+  }
+}
+
+function tryAutoSplitIsp(val) {
+  const raw = val.trim();
+  const mScheme = raw.match(/^(socks5h?|socks|https?):\/\/(?:([^:@]+)(?::([^@]*))?@)?([^:/]+):(\d+)/i);
+  if (mScheme) {
+    $("#ispProto").value = mScheme[1].toLowerCase().startsWith("http") ? "http" : "socks5";
+    $("#ispHost").value = mScheme[4];
+    $("#ispPort").value = mScheme[5];
+    if (mScheme[2]) $("#ispUser").value = decodeURIComponent(mScheme[2]);
+    if (mScheme[3]) $("#ispPass").value = decodeURIComponent(mScheme[3]);
+    toast("已自动解析并填充静态 ISP 参数");
+    return;
+  }
+  const parts = raw.split(":");
+  if (parts.length === 4 && /^\d+$/.test(parts[1])) {
+    $("#ispHost").value = parts[0].trim();
+    $("#ispPort").value = parts[1].trim();
+    $("#ispUser").value = parts[2].trim();
+    $("#ispPass").value = parts[3].trim();
+    toast("已自动拆分 IP:端口:用户:密码");
+  }
+}
+
 function buildLinkFromFields() {
   const host = $("#ispHost").value.trim();
   const port = $("#ispPort").value.trim();
-  if (!host && !port) return "";
+  if (!host || !port) throw new Error("请填写静态 ISP 的代理 IP 和端口");
   const proto = $("#ispProto").value;
   const user = encodeURIComponent($("#ispUser").value.trim());
   const pass = encodeURIComponent($("#ispPass").value.trim());
@@ -271,12 +339,7 @@ async function boot() {
   state = await api("state");
   $("#login").hidden = true; $("#app").hidden = false;
   $("#title").textContent = state.name + " 中转面板"; dbgLabel(state.debug_log);
-  if (state.upstream) {
-    $("#ispHost").value = state.upstream.server || "";
-    $("#ispPort").value = state.upstream.port || "";
-    $("#ispUser").value = state.upstream.username || "";
-    if (state.upstream.link_type === "http") $("#ispProto").value = "http";
-  }
+  syncIspFields();
   renderNodes(); renderRules();
   refreshStatus().catch(e => toast(e.message));
   refreshReboot().catch(() => {});
@@ -301,13 +364,31 @@ $("#nodes").onclick = async e => {
     else box.textContent = "二维码库加载失败，请复制链接";
   }
 };
-$("#bSave").onclick = e => busy(e.target, async () => {
-  const link = $("#bLink").value.trim() || buildLinkFromFields();
+$("#ispHost").oninput = e => tryAutoSplitIsp(e.target.value);
+$("#ispSave").onclick = e => busy(e.target, async () => {
+  const link = buildLinkFromFields();
   const r = await api("upstream", {link});
-  toast(r.message); $("#bLink").value = ""; state = await api("state"); await refreshStatus();
+  toast("静态 ISP " + r.message);
+  $("#ispPass").value = "";
+  state = await api("state");
+  syncIspFields();
+  await refreshStatus();
+});
+$("#ispClear").onclick = () => {
+  $("#ispProto").value = "socks5";
+  $("#ispHost").value = "";
+  $("#ispPort").value = "";
+  $("#ispUser").value = "";
+  $("#ispPass").value = "";
+  $("#ispPass").placeholder = "Proxy-Seller 密码";
+};
+$("#bSave").onclick = e => busy(e.target, async () => {
+  const r = await api("upstream", {link: $("#bLink").value.trim()});
+  toast(r.message); $("#bLink").value = ""; state = await api("state"); syncIspFields(); await refreshStatus();
 });
 $("#rulesSave").onclick = e => busy(e.target, async () => {
-  const lines = id => $(id).value.split("\n").map(x => x.trim()).filter(Boolean);
+  const lines = id => $(id).value.split("
+").map(x => x.trim()).filter(Boolean);
   const r = await api("rules", {domain_suffix: lines("#suffix"), domain_keyword: lines("#keyword")});
   state.rules = r.rules; state.presets = r.presets; renderRules(); toast("规则已保存，几秒内生效");
 });
