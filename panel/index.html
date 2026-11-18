@@ -21,9 +21,10 @@ main{max-width:1080px;margin:0 auto;padding:0 16px 40px;display:grid;gap:16px;gr
 button{background:var(--accent);color:#fff;border:0;border-radius:6px;padding:6px 12px;font:inherit;cursor:pointer}
 button.ghost{background:transparent;color:var(--accent);border:1px solid var(--line)}
 button:disabled{opacity:.5;cursor:wait}
-input,textarea{width:100%;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:7px 9px;font:13px/1.5 ui-monospace,Menlo,Consolas,monospace}
+input,textarea,select{width:100%;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:7px 9px;font:13px/1.5 ui-monospace,Menlo,Consolas,monospace}
 textarea{min-height:220px;resize:vertical}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
 .node{border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:10px}
 .node b{font-size:14px}
 .link{word-break:break-all;background:var(--code);padding:6px 8px;border-radius:6px;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;margin:6px 0;max-height:66px;overflow:auto}
@@ -35,7 +36,7 @@ td{padding:4px 0;border-bottom:1px solid var(--line);vertical-align:top}
 td:first-child{color:var(--mute);width:92px}
 pre{background:var(--code);padding:10px;border-radius:6px;max-height:320px;overflow:auto;font-size:12px;white-space:pre-wrap;word-break:break-all}
 .cols{display:grid;grid-template-columns:2fr 1fr;gap:12px}
-@media (max-width:640px){.cols{grid-template-columns:1fr}}
+@media (max-width:640px){.cols,.grid2{grid-template-columns:1fr}}
 #login{max-width:360px;margin:12vh auto;padding:0 16px}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:6px;display:none;max-width:90vw}
 </style>
@@ -59,10 +60,20 @@ pre{background:var(--code);padding:10px;border-radius:6px;max-height:320px;overf
   </section>
 
   <section class="card">
-    <h2>B 机出口</h2>
+    <h2>静态 ISP / B 机出口</h2>
     <table id="bStatus"></table>
-    <p class="mute">粘贴 B 机脚本给出的任意一个节点分享链接（推荐 vless reality）。支持 vless / vmess / hysteria2 / tuic / anytls / trojan / ss。</p>
-    <input id="bLink" placeholder="vless://...">
+    <p class="mute">支持直接粘贴 Proxy-Seller 导出的 <code>IP:SOCKS5端口:用户名:密码</code>、<code>socks5://...</code>、<code>http://...</code>，或任意节点分享链接（vless / hy2 等）。</p>
+    <input id="bLink" placeholder="例如 1.2.3.4:50100:user:pass 或 socks5://...">
+    <details style="margin-top:8px">
+      <summary class="mute" style="cursor:pointer">分项填写 Proxy-Seller 静态 ISP 参数</summary>
+      <div class="grid2">
+        <select id="ispProto"><option value="socks5">SOCKS5（推荐）</option><option value="http">HTTP</option></select>
+        <input id="ispHost" placeholder="代理 IP 地址">
+        <input id="ispPort" placeholder="端口（如 50100）">
+        <input id="ispUser" placeholder="用户名（留空表示IP白名单）">
+        <input id="ispPass" placeholder="密码">
+      </div>
+    </details>
     <div class="row"><button id="bSave">保存并生效</button></div>
   </section>
 
@@ -72,10 +83,10 @@ pre{background:var(--code);padding:10px;border-radius:6px;max-height:320px;overf
   </section>
 
   <section class="card wide">
-    <h2>智能分流：走 B 机的网站</h2>
-    <p class="mute">只对两个"智能分流"节点（节点 3、4）生效。每行一个。域名后缀会同时匹配子域名，例如 <code>google.com</code> 会包含 <code>gemini.google.com</code>。保存后几秒内自动生效，不用重启，客户端也不用更新。</p>
-    <h2 style="font-size:14px;margin:12px 0 6px">一键预设</h2>
-    <p class="mute">新安装默认一组都没启用，需要你手动点"一键添加"才会生效；点"一键删除"立即移除这一组的全部域名，不影响其他域名。</p>
+    <h2>智能分流：走静态 ISP / B 机的网站</h2>
+    <p class="mute">只对两个"智能分流"节点（节点 3、4）生效。每行一个。域名后缀会同时匹配子域名，例如 <code>openai.com</code> 会包含 <code>api.openai.com</code>。保存后几秒内自动生效，不用重启，客户端也不用更新。</p>
+    <h2 style="font-size:14px;margin:12px 0 6px">一键预设（已补全全部关联与鉴权域名）</h2>
+    <p class="mute">新安装默认一组都没启用，需要手动点"一键添加"才会生效；点"一键删除"立即移除这一组的全部域名，不影响其他域名。</p>
     <div id="presets"></div>
     <div class="cols">
       <div><div class="mute">域名后缀</div><textarea id="suffix"></textarea></div>
@@ -84,21 +95,21 @@ pre{background:var(--code);padding:10px;border-radius:6px;max-height:320px;overf
     <div class="row">
       <button id="rulesSave">保存规则</button>
       <button class="ghost" id="rulesReset">清空全部规则</button>
-      <input id="matchIn" placeholder="输入网址，看它会不会走 B" style="max-width:280px">
+      <input id="matchIn" placeholder="输入网址，看它会不会走静态 ISP" style="max-width:280px">
       <span id="matchOut"></span>
     </div>
   </section>
 
   <section class="card wide">
     <h2>出口测试（从 A 机发起）</h2>
-    <p class="mute">查看各路径的出口 IP 和 Gemini 访问情况。"强制走 B"应显示 B 机 IP；"智能分流"查 IP 用的 ipinfo.io 不在规则里，所以显示 A 的 IP 是正常的，Gemini 那一行才是经 B 访问的结果。能打开 Gemini 页面不代表一定能登录，最终以客户端实测为准。</p>
-    <div class="row"><button data-via="direct">A 直连</button><button data-via="b">强制走 B</button><button data-via="smart">智能分流（访问 Gemini）</button></div>
+    <p class="mute">"强制走静态 ISP / B"应显示你购买的美国静态 ISP IP 与宽带运营商（而非 Hosting 机房）；启用"Claude + ChatGPT 完整套装"后，"智能分流"测试中的 IP 检测也会显示美国静态 ISP。网页状态返回 <code>HTTP 200</code> 或 <code>HTTP 403</code>（Cloudflare 验证盾牌）均代表代理链路已成功连通目标边缘节点。</p>
+    <div class="row"><button data-via="direct">A 直连</button><button data-via="b">强制走静态 ISP / B</button><button data-via="smart">智能分流（实测 AI 与 IP）</button></div>
     <table id="testOut" style="margin-top:10px"></table>
   </section>
 
   <section class="card wide">
     <h2>定时重启 VPS</h2>
-    <p class="mute">每天在设定的时间自动重启整台 VPS。sing-box 和面板都设为开机自启，节点、分流规则、B 机出口、证书等设置都保存在硬盘上，重启后和重启前完全一致；开机后面板还会自检，sing-box 没起来会自动重启它一次，结果显示在下面。</p>
+    <p class="mute">每天在设定的时间自动重启整台 VPS。sing-box 和面板都设为开机自启，节点、分流规则、静态 ISP 出口、证书等设置都保存在硬盘上，重启后和重启前完全一致；开机后面板还会自检，sing-box 没起来会自动重启它一次，结果显示在下面。</p>
     <table id="rebootInfo"></table>
     <div class="row">
       <label><input type="checkbox" id="rbEnabled" style="width:auto"> 每天自动重启</label>
@@ -113,7 +124,7 @@ pre{background:var(--code);padding:10px;border-radius:6px;max-height:320px;overf
     <h2>sing-box 日志</h2>
     <div class="row" style="margin:0 0 8px"><button class="ghost" id="logsBtn">刷新日志</button></div>
     <pre id="logs">点击刷新查看</pre>
-    <h2 style="margin-top:14px">诊断：哪些域名走了 B</h2>
+    <h2 style="margin-top:14px">诊断：哪些域名走了静态 ISP / B</h2>
     <p class="mute">用来排查"某个网站/软件在智能节点下异常"。先点"开启诊断"（会记录每个连接，会重启一次 sing-box，用完记得关闭），然后在客户端操作出问题的软件，再点"查看"，会列出访问过的域名和它们走的出口。</p>
     <div class="row" style="margin:0 0 8px"><button class="ghost" id="dbgOn">开启诊断</button><button class="ghost" id="dbgOff">关闭诊断</button><button class="ghost" id="routedBtn">查看</button><span id="dbgState" class="mute"></span></div>
     <table id="routed"></table>
@@ -148,9 +159,9 @@ async function login() {
 }
 
 const NODES = [
-  ["hy2", "节点 1 · Hysteria2", "A 机直连，UDP 协议，速度快"],
-  ["vless", "节点 2 · VLESS Reality", "A 机直连，TCP 协议，稳定"],
-  ["smart", "节点 3 · 智能分流 VLESS Reality", "下面列表里的网站走 B 机出口，其余从 A 直连"],
+  ["hy2", "节点 1 · Hysteria2", "A 机直连，UDP 协议，适合 YouTube 与日常高速上网"],
+  ["vless", "节点 2 · VLESS Reality", "A 机直连，TCP 协议，稳定直出"],
+  ["smart", "节点 3 · 智能分流 VLESS Reality", "推荐主力：Claude/GPT 等列表网站走静态 ISP，其余 A 直连"],
   ["smart_hy2", "节点 4 · 智能分流 Hysteria2", "分流规则同节点 3，UDP 协议"],
 ];
 
@@ -166,7 +177,7 @@ const PRESET_BADGE = {on: ["已启用", "ok"], partial: ["部分启用", "warn"]
 
 function renderPresets() {
   if (!state.presets) {
-    $("#presets").innerHTML = `<div class="node bad">面板后端还是旧版本，没有预设功能。请在 A 机运行 <code>systemctl restart vps-relay-panel</code> 后刷新本页；还不行就重新运行一遍安装命令。</div>`;
+    $("#presets").innerHTML = `<div class="node bad">面板后端还是旧版本，没有预设功能。请在 A 机运行 <code>systemctl restart vps-relay-panel</code> 后刷新本页。</div>`;
     return;
   }
   $("#presets").innerHTML = state.presets.map(p => `
@@ -207,9 +218,9 @@ async function refreshStatus() {
     lat = ok.length ? `<span class="${ok.length === b.latency.length ? "ok" : "warn"}">${ok.map(x => x + " ms").join(" / ")}</span>${ok.length < b.latency.length ? " (有丢包)" : ""}` : `<span class="bad">连不上</span>`;
   } else lat = `<span class="mute">${esc(b.note)}</span>`;
   $("#bStatus").innerHTML = `
-    <tr><td>协议</td><td>${esc(b.type)}</td></tr>
-    <tr><td>地址</td><td>${esc(b.server)}:${b.port}</td></tr>
-    <tr><td>A→B 延迟</td><td>${lat}</td></tr>`;
+    <tr><td>类型</td><td>${esc(b.type)} ${b.has_auth ? '<span class="ok">(账密认证)</span>' : ''}</td></tr>
+    <tr><td>出口地址</td><td>${esc(b.server)}:${b.port}</td></tr>
+    <tr><td>A→出口延迟</td><td>${lat}</td></tr>`;
 }
 
 function matches(host) {
@@ -218,29 +229,54 @@ function matches(host) {
   const suf = $("#suffix").value.split("\n").map(x => x.trim().toLowerCase()).filter(Boolean);
   const kw = $("#keyword").value.split("\n").map(x => x.trim().toLowerCase()).filter(Boolean);
   const s = suf.find(x => host === x || host.endsWith("." + x));
-  if (s) return `<span class="ok">走 B（后缀 ${esc(s)}）</span>`;
+  if (s) return `<span class="ok">走静态 ISP / B（后缀 ${esc(s)}）</span>`;
   const k = kw.find(x => host.includes(x));
-  if (k) return `<span class="ok">走 B（关键词 ${esc(k)}）</span>`;
+  if (k) return `<span class="ok">走静态 ISP / B（关键词 ${esc(k)}）</span>`;
   return `<span class="mute">A 直连</span>`;
+}
+
+function fmtSite(r) {
+  if (!r) return "-";
+  if (r.error) return `<span class="bad">失败：${esc(r.error)}</span>`;
+  const ok = r.status === 200 || r.status === 403;
+  const note = r.status === 403 ? " (已触达边缘盾牌)" : "";
+  return `<span class="${ok ? "ok" : "warn"}">HTTP ${r.status}${note}</span>，${r.ms} ms`;
 }
 
 async function runTest(via, btn) {
   await busy(btn, async () => {
-    const names = {direct: "A 直连", b: "强制走 B", smart: "智能分流"};
+    const names = {direct: "A 直连", b: "强制走静态 ISP / B", smart: "智能分流"};
     const r = await api("test", {via});
-    const g = r.gemini;
-    const gtxt = g.error ? `<span class="bad">失败：${esc(g.error)}</span>` : `<span class="${g.status === 200 ? "ok" : "warn"}">HTTP ${g.status}</span>，${g.ms} ms<br><span class="mute">${esc(g.url)}</span>`;
-    const ip = r.ip ? `${esc(r.ip)} · ${esc(r.country)} ${esc(r.city || "")} · ${esc(r.org || "")}` : `<span class="bad">${esc(r.ip_error)}</span>`;
-    const row = `<tr data-row="${via}"><td>${names[via]}</td><td>出口 IP：${ip}<br>Gemini：${gtxt}</td></tr>`;
+    const loc = [r.country, r.region, r.city].filter(Boolean).join(" · ");
+    const tz = r.timezone ? ` · 时区 ${esc(r.timezone)}` : "";
+    const ip = r.ip ? `<b>${esc(r.ip)}</b> · ${esc(loc)} · ${esc(r.org || "")}${tz}` : `<span class="bad">${esc(r.ip_error)}</span>`;
+    const row = `<tr data-row="${via}"><td>${names[via]}</td><td>出口 IP：${ip}<br>Claude：${fmtSite(r.claude)}<br>ChatGPT：${fmtSite(r.chatgpt)}<br>Gemini：${fmtSite(r.gemini)}</td></tr>`;
     const old = document.querySelector(`tr[data-row="${via}"]`);
     if (old) old.outerHTML = row; else $("#testOut").insertAdjacentHTML("beforeend", row);
   });
+}
+
+function buildLinkFromFields() {
+  const host = $("#ispHost").value.trim();
+  const port = $("#ispPort").value.trim();
+  if (!host && !port) return "";
+  const proto = $("#ispProto").value;
+  const user = encodeURIComponent($("#ispUser").value.trim());
+  const pass = encodeURIComponent($("#ispPass").value.trim());
+  const auth = user ? (pass ? `${user}:${pass}@` : `${user}@`) : "";
+  return `${proto}://${auth}${host}:${port}`;
 }
 
 async function boot() {
   state = await api("state");
   $("#login").hidden = true; $("#app").hidden = false;
   $("#title").textContent = state.name + " 中转面板"; dbgLabel(state.debug_log);
+  if (state.upstream) {
+    $("#ispHost").value = state.upstream.server || "";
+    $("#ispPort").value = state.upstream.port || "";
+    $("#ispUser").value = state.upstream.username || "";
+    if (state.upstream.link_type === "http") $("#ispProto").value = "http";
+  }
   renderNodes(); renderRules();
   refreshStatus().catch(e => toast(e.message));
   refreshReboot().catch(() => {});
@@ -266,7 +302,8 @@ $("#nodes").onclick = async e => {
   }
 };
 $("#bSave").onclick = e => busy(e.target, async () => {
-  const r = await api("upstream", {link: $("#bLink").value});
+  const link = $("#bLink").value.trim() || buildLinkFromFields();
+  const r = await api("upstream", {link});
   toast(r.message); $("#bLink").value = ""; state = await api("state"); await refreshStatus();
 });
 $("#rulesSave").onclick = e => busy(e.target, async () => {
@@ -310,7 +347,7 @@ $("#dbgOff").onclick = e => busy(e.target, async () => { const r = await api("de
 $("#routedBtn").onclick = e => busy(e.target, async () => {
   const r = await api("routed"); dbgLabel(r.debug_log);
   $("#routed").innerHTML = r.rows.length
-    ? `<tr><td>出口</td><td>域名（次数）</td></tr>` + r.rows.map(x => `<tr><td class="${x.via === "B" ? "warn" : ""}">${x.via}</td><td>${esc(x.host)} (${x.count})</td></tr>`).join("")
+    ? `<tr><td>出口</td><td>域名（次数）</td></tr>` + r.rows.map(x => `<tr><td class="${x.via !== "A直连" ? "warn" : ""}">${x.via}</td><td>${esc(x.host)} (${x.count})</td></tr>`).join("")
     : `<tr><td colspan="2" class="mute">没有记录。请确认已开启诊断，并且刚在客户端用过智能节点。</td></tr>`;
 });
 $("#logsBtn").onclick = e => busy(e.target, async () => { const r = await api("logs"); $("#logs").textContent = r.logs || "（无日志）"; });

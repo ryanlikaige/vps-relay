@@ -7,7 +7,7 @@
   app.py apply           按 state.json 重新生成 sing-box 配置并重启
   app.py info            显示面板地址和节点链接
   app.py reset-password  重置面板密码
-  app.py set-upstream <分享链接>  设置 B 机节点
+  app.py set-upstream <分享链接或IP:端口:用户:密码>  设置静态 ISP / B 机出口
   app.py set-domain <域名>       给面板和 Hysteria2 申请正式证书
 """
 import base64
@@ -39,51 +39,181 @@ SINGBOX = os.path.join(OPT, "bin", "sing-box")
 INDEX_HTML = os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html")
 SERVICE = "sb-relay"
 
-DEFAULT_SUFFIXES = [
+GEMINI_DOMAINS = [
     "gemini.google.com",
     "gemini.google",
     "bard.google.com",
     "aistudio.google.com",
     "makersuite.google.com",
     "ai.google.dev",
+    "ai.google",
     "generativelanguage.googleapis.com",
     "proactivebackend-pa.googleapis.com",
     "robinfrontend-pa.googleapis.com",
     "alkalimakersuite-pa.clients6.google.com",
     "alkalicore-pa.clients6.google.com",
     "geller-pa.googleapis.com",
+    "assistant-s3-pa.googleapis.com",
+    "aisandbox-pa.googleapis.com",
+    "tailwind-pa.googleapis.com",
+    "waa-pa.googleapis.com",
     "notebooklm.google",
     "notebooklm.google.com",
     "labs.google",
+    "labs.google.com",
     "deepmind.google",
+    "deepmind.com",
+    "jules.google",
+    "jules.google.com",
+    "opal.google",
+    "opal.withgoogle.com",
+    "stitch.withgoogle.com",
+    "idx.google.com",
+    "idx.dev",
+    "firebase.studio",
 ]
+
+CHATGPT_DOMAINS = [
+    "openai.com",
+    "chatgpt.com",
+    "chat.com",
+    "ai.com",
+    "oaistatic.com",
+    "oaiusercontent.com",
+    "sora.com",
+    "openaiapi-site.azureedge.net",
+    "openaicom.imgix.net",
+    "auth0.com",
+    "statsigapi.net",
+    "statsig.com",
+    "featuregates.org",
+    "arkoselabs.com",
+    "challenges.cloudflare.com",
+    "stripe.com",
+    "stripecdn.com",
+]
+
+CLAUDE_DOMAINS = [
+    "claude.ai",
+    "claude.com",
+    "anthropic.com",
+    "claudeusercontent.com",
+    "clau.de",
+    "statsigapi.net",
+    "statsig.com",
+    "featuregates.org",
+    "challenges.cloudflare.com",
+    "hcaptcha.com",
+    "stripe.com",
+    "stripecdn.com",
+]
+
+VERIFY_IP_DOMAINS = [
+    "textverified.com",
+    "ipinfo.io",
+    "scamalytics.com",
+    "browserleaks.com",
+]
+
+CLAUDE_GPT_ALL = list(dict.fromkeys(CLAUDE_DOMAINS + CHATGPT_DOMAINS + VERIFY_IP_DOMAINS))
+
+META_AI_DOMAINS = [
+    "meta.ai",
+    "meta.com",
+    "ai.meta.com",
+    "llama.com",
+    "metademolab.com",
+    "fbaipublicfiles.com",
+]
+
+META_ALL_DOMAINS = [
+    "facebook.com",
+    "fb.com",
+    "fb.me",
+    "fb.watch",
+    "fb.gg",
+    "fbcdn.net",
+    "facebook.net",
+    "fbsbx.com",
+    "fbpigeon.com",
+    "fbworkmail.com",
+    "messenger.com",
+    "m.me",
+    "accountkit.com",
+    "atdmt.com",
+    "freebasics.com",
+    "internet.org",
+    "instagram.com",
+    "cdninstagram.com",
+    "ig.me",
+    "igcdn.com",
+    "igsonar.com",
+    "igtv.com",
+    "threads.net",
+    "threads.com",
+    "whatsapp.com",
+    "whatsapp.net",
+    "wa.me",
+    "whatsappbrand.com",
+    "meta.com",
+    "meta.ai",
+    "oculus.com",
+    "oculuscdn.com",
+]
+
+GROK_DOMAINS = [
+    "grok.com",
+    "x.ai",
+    "xai.com",
+    "challenges.cloudflare.com",
+    "stripe.com",
+    "stripecdn.com",
+]
+
+X_ALL_DOMAINS = [
+    "x.com",
+    "twitter.com",
+    "twimg.com",
+    "t.co",
+    "twttr.com",
+    "twttr.net",
+    "tweetdeck.com",
+    "periscope.tv",
+    "pscp.tv",
+    "vine.co",
+    "ads-twitter.com",
+    "cms-twdigitalassets.com",
+]
+
+DEFAULT_SUFFIXES = GEMINI_DOMAINS
 DEFAULT_KEYWORDS = []
 
-# 一键预设：每组是一批域名后缀，面板里可以一键添加或删除
+# 一键预设：每组是一批完整域名后缀，面板里可以一键添加或删除
 PRESETS = [
+    {"id": "claude_gpt", "name": "Claude + ChatGPT 完整套装（静态 ISP 推荐）",
+     "desc": "一键覆盖 Claude、ChatGPT 网页与 App、Auth0/Arkose 登录鉴权、CF/hCaptcha 盾牌、Stripe 支付及接码/IP 纯净度检测",
+     "suffix": CLAUDE_GPT_ALL},
     {"id": "gemini", "name": "Gemini / Google AI",
-     "desc": "Gemini、AI Studio、NotebookLM 等", "suffix": DEFAULT_SUFFIXES},
+     "desc": "完整覆盖 Gemini、AI Studio、NotebookLM、DeepMind、Google Labs、Jules、Opal、IDX 等（不含 YouTube）",
+     "suffix": GEMINI_DOMAINS},
     {"id": "chatgpt", "name": "ChatGPT / OpenAI",
-     "desc": "ChatGPT 网页和 App、OpenAI API、Sora",
-     "suffix": ["openai.com", "chatgpt.com", "chat.com", "oaistatic.com", "oaiusercontent.com",
-                "sora.com", "openaiapi-site.azureedge.net", "featuregates.org"]},
+     "desc": "完整覆盖 ChatGPT 网页与 App、OpenAI API、Sora、Auth0/Arkose 登录验证、Statsig 开关及 Stripe 支付",
+     "suffix": CHATGPT_DOMAINS},
     {"id": "claude", "name": "Claude / Anthropic",
-     "desc": "Claude 网页、桌面版和 App、Anthropic API",
-     "suffix": ["claude.ai", "claude.com", "anthropic.com", "claudeusercontent.com", "clau.de"]},
+     "desc": "完整覆盖 Claude 网页、桌面版与 App、Anthropic API、Artifacts 沙盒、CF/hCaptcha 验证及 Stripe 支付",
+     "suffix": CLAUDE_DOMAINS},
     {"id": "meta", "name": "Meta AI",
-     "desc": "meta.ai 网页版和 Llama 官网（Facebook、Instagram 里的 Meta AI 要再加下面的全站组）",
-     "suffix": ["meta.ai", "ai.meta.com", "llama.com"]},
+     "desc": "完整覆盖 meta.ai 网页版、Meta 账号鉴权、Llama 官网及模型资源（不含 FB/IG 视频流）",
+     "suffix": META_AI_DOMAINS},
     {"id": "meta_all", "name": "Facebook / Instagram / WhatsApp 全站",
-     "desc": "整个 Meta 旗下网站和 App 都走 B，流量大（含视频），B 晚高峰慢时会受影响",
-     "suffix": ["facebook.com", "fb.com", "fb.me", "fbcdn.net", "facebook.net", "fbsbx.com", "messenger.com",
-                "instagram.com", "cdninstagram.com", "threads.net", "threads.com",
-                "whatsapp.com", "whatsapp.net"]},
+     "desc": "完整覆盖 Meta 旗下全部网站、短链（wa.me/ig.me/m.me/fb.watch）与 CDN（含视频，流量较大）",
+     "suffix": META_ALL_DOMAINS},
     {"id": "grok", "name": "Grok / xAI",
-     "desc": "grok.com 和 xAI API（X 网站里的 Grok 要再加下面的全站组）",
-     "suffix": ["grok.com", "x.ai"]},
+     "desc": "完整覆盖 grok.com 独立站、xAI 控制台与 API、CF 验证及 SuperGrok 支付",
+     "suffix": GROK_DOMAINS},
     {"id": "x_all", "name": "X (Twitter) 全站",
-     "desc": "整个 X 网站和 App 都走 B，流量大（含视频），B 晚高峰慢时会受影响",
-     "suffix": ["x.com", "twitter.com", "twimg.com", "t.co"]},
+     "desc": "完整覆盖 X 网页与 App、图片视频 CDN、t.co 短链、TweetDeck 及 Spaces 语音直播（流量较大）",
+     "suffix": X_ALL_DOMAINS},
 ]
 
 
@@ -96,6 +226,7 @@ def preset_status(state):
         out.append({"id": p["id"], "name": p["name"], "desc": p["desc"], "domains": p["suffix"], "status": status})
     return out
 
+
 lock = threading.Lock()
 
 
@@ -106,7 +237,6 @@ def load_state():
         state = json.load(f)
     ib = state["inbounds"]
     if "smart_hy2" not in ib:
-        # 旧版本升级：补上智能分流的 Hysteria2 节点
         used = {n["port"] for n in ib.values()} | {state["panel"]["port"]} | set(state["probe"].values())
         ib["smart_hy2"] = {"port": pick_port("SMART_HY2_PORT", used), "password": secrets.token_urlsafe(16)}
         save_state(state)
@@ -142,7 +272,7 @@ def run(cmd, timeout=30):
     return p.returncode, (p.stdout + p.stderr).strip()
 
 
-# ---------------------------------------------------------------- 分享链接解析
+# ---------------------------------------------------------------- 分享链接与静态 ISP 解析
 
 def _q(params, *names, default=""):
     for n in names:
@@ -182,9 +312,49 @@ def _transport(net, host, path, service_name):
     return None
 
 
+def _parse_bare_proxy(raw):
+    """解析 Proxy-Seller 常见的 IP:端口:用户名:密码 / IP:端口 / 用户名:密码@IP:端口 格式（默认 SOCKS5）。"""
+    clean = raw.split("#", 1)[0].strip()
+    if "@" in clean:
+        return parse_link("socks5://" + clean)
+    m6 = re.match(r"^\[([^\]]+)\]:(\d+)(?::([^:]*):(.*))?$", clean)
+    if m6:
+        host, port, user, pw = m6.group(1), int(m6.group(2)), m6.group(3), m6.group(4)
+        if not (1 <= port <= 65535):
+            raise ValueError("端口超出范围")
+        ob = {"type": "socks", "server": host, "server_port": port, "version": "5"}
+        if user:
+            ob["username"] = user
+        if pw is not None and pw != "":
+            ob["password"] = pw
+        return ob
+    parts = clean.split(":", 3)
+    if len(parts) == 2 and parts[1].isdigit():
+        port = int(parts[1])
+        if not parts[0] or not (1 <= port <= 65535):
+            raise ValueError("地址或端口格式不对")
+        return {"type": "socks", "server": parts[0].strip(), "server_port": port, "version": "5"}
+    if len(parts) == 4 and parts[1].isdigit():
+        port = int(parts[1])
+        if not parts[0] or not (1 <= port <= 65535):
+            raise ValueError("地址或端口格式不对")
+        ob = {"type": "socks", "server": parts[0].strip(), "server_port": port, "version": "5"}
+        if parts[2]:
+            ob["username"] = parts[2]
+        if parts[3]:
+            ob["password"] = parts[3]
+        return ob
+    raise ValueError("无法识别的代理格式，请填写 IP:端口:用户名:密码 或 socks5:// / vless:// 链接")
+
+
 def parse_link(link):
-    """把 B 机的分享链接转成 sing-box 出站配置。"""
+    """把静态 ISP 代理（SOCKS5/HTTP）或 B 机分享链接转成 sing-box 出站配置。"""
     link = link.strip()
+    if not link:
+        raise ValueError("请输入代理参数或节点链接")
+    if "://" not in link:
+        return _parse_bare_proxy(link)
+
     scheme = link.split("://", 1)[0].lower()
     if scheme == "vmess":
         raw = link[8:].split("#", 1)[0]
@@ -216,6 +386,27 @@ def parse_link(link):
     pw = urllib.parse.unquote(u.password or "") if u.password is not None else None
     insecure = _truthy(_q(p, "insecure", "allowInsecure", "allow_insecure"))
     sni = _q(p, "sni", "peer", default="")
+
+    if scheme in ("socks", "socks5", "socks5h"):
+        ob = {"type": "socks", "server": host, "server_port": port, "version": "5"}
+        if user:
+            ob["username"] = user
+        if pw is not None:
+            ob["password"] = pw
+        return ob
+
+    if scheme in ("http", "https"):
+        ob = {"type": "http", "server": host, "server_port": port}
+        if user:
+            ob["username"] = user
+        if pw is not None:
+            ob["password"] = pw
+        if scheme == "https":
+            tls = {"enabled": True, "server_name": sni or host}
+            if insecure:
+                tls["insecure"] = True
+            ob["tls"] = tls
+        return ob
 
     if scheme == "vless" or scheme == "trojan":
         ob = {"type": scheme, "server": host, "server_port": port}
@@ -316,12 +507,14 @@ def node_links(state):
     vless = ("vless://%s@%s:%d?encryption=none&flow=xtls-rprx-vision&security=reality"
              "&sni=%s&fp=chrome&pbk=%s&sid=%s&type=tcp#%s") % (
         v["uuid"], h, v["port"], v["sni"], v["public_key"], v["short_id"], link_name(state, "reality"))
+
     def hy2_link(node, suffix):
         if state.get("domain"):
             return "hysteria2://%s@%s:%d?sni=%s&alpn=h3#%s" % (
                 urllib.parse.quote(node["password"]), h, node["port"], state["domain"], link_name(state, suffix))
         return "hysteria2://%s@%s:%d?sni=%s&alpn=h3&insecure=1#%s" % (
             urllib.parse.quote(node["password"]), h, node["port"], ib["hy2"]["sni"], link_name(state, suffix))
+
     hy2 = hy2_link(ib["hy2"], "hy2")
     smart_hy2 = hy2_link(ib["smart_hy2"], "smart-hy2")
     m = ib["smart"]
@@ -338,7 +531,6 @@ def build_rules(state):
     if state["rules"]["domain_keyword"]:
         rule["domain_keyword"] = state["rules"]["domain_keyword"]
     if not rule:
-        # 空规则集也要能被 sing-box 加载，用一个不会命中的域名占位
         rule["domain"] = ["placeholder.invalid"]
     return {"version": 3, "rules": [rule]}
 
@@ -385,27 +577,39 @@ def build_config(state):
     up = state.get("upstream")
     to_b = dict(up["outbound"]) if up else {"type": "direct"}
     to_b["tag"] = "to-b"
+    route_rules = [
+        {"action": "sniff"},
+        {"inbound": ["probe-b"], "outbound": "to-b"},
+    ]
+    # 静态 ISP (SOCKS5 / HTTP) 不支持 UDP 转发，阻断命中分流规则的 QUIC (UDP 443)，让浏览器秒切 TCP TLS 1.3
+    if to_b.get("type") in ("socks", "http"):
+        route_rules.append({
+            "inbound": ["smart-in", "smart-hy2-in", "probe-smart"],
+            "rule_set": ["via-b"],
+            "network": "udp",
+            "port": 443,
+            "action": "reject",
+        })
+    route_rules.append({
+        "inbound": ["smart-in", "smart-hy2-in", "probe-smart"],
+        "rule_set": ["via-b"],
+        "outbound": "to-b",
+    })
     return {
         "log": {"level": "info" if state.get("debug_log") else "warn", "timestamp": True},
         "dns": {"servers": [{"type": "local", "tag": "local"}]},
         "inbounds": [
-            # 节点 1、2：纯直连；节点 3、4：智能分流，规则内网站走 B
             hy2_inbound("hy2-in", state, ib["hy2"]),
             reality_inbound("vless-in", ib, ib["vless"]),
             reality_inbound("smart-in", ib, ib["smart"]),
             hy2_inbound("smart-hy2-in", state, ib["smart_hy2"]),
-            # 面板自检用：probe-b 固定走 B，probe-smart 按规则分流
             {"type": "mixed", "tag": "probe-b", "listen": "127.0.0.1", "listen_port": state["probe"]["b"]},
             {"type": "mixed", "tag": "probe-smart", "listen": "127.0.0.1", "listen_port": state["probe"]["smart"]},
         ],
         "outbounds": [{"type": "direct", "tag": "direct"}, to_b],
         "route": {
             "rule_set": [{"type": "local", "tag": "via-b", "format": "source", "path": RULES}],
-            "rules": [
-                {"action": "sniff"},
-                {"inbound": ["probe-b"], "outbound": "to-b"},
-                {"inbound": ["smart-in", "smart-hy2-in", "probe-smart"], "rule_set": ["via-b"], "outbound": "to-b"},
-            ],
+            "rules": route_rules,
             "final": "direct",
             "default_domain_resolver": "local",
         },
@@ -454,10 +658,10 @@ def routed_domains(lines=5000):
     seen = {}
     for m in ROUTED_RE.finditer(re.sub(r"\x1b\[[0-9;]*m", "", out)):
         host = m.group(3).rsplit(":", 1)[0]
-        via = "B" if m.group(2) == "to-b" else "直连"
+        via = "ISP/B出口" if m.group(2) == "to-b" else "A直连"
         seen[(host, via)] = seen.get((host, via), 0) + 1
     rows = [{"host": h, "via": v, "count": c} for (h, v), c in seen.items()]
-    rows.sort(key=lambda r: (r["via"] != "B", -r["count"]))
+    rows.sort(key=lambda r: (r["via"] != "ISP/B出口", -r["count"]))
     return rows[:300]
 
 
@@ -474,7 +678,6 @@ Description=vps-relay 定时重启 VPS
 Type=oneshot
 ExecStart=/bin/sh -c 'sync; exec /bin/systemctl reboot'
 """
-    # Persistent=false：错过时间点（比如那时机器本来就关着）开机后不要补重启，避免连环重启
     timer = """[Unit]
 Description=vps-relay 每日定时重启
 
@@ -502,7 +705,7 @@ def apply_reboot_schedule(cfg):
         code, out = run(["systemctl", "enable", "--now", REBOOT_TIMER])
         if code != 0:
             raise ValueError("启用定时器失败: " + out)
-        run(["systemctl", "restart", REBOOT_TIMER])  # 改了时间后让新时间立即生效
+        run(["systemctl", "restart", REBOOT_TIMER])
     else:
         run(["systemctl", "disable", "--now", REBOOT_TIMER])
 
@@ -534,13 +737,13 @@ def tcp_listening(port):
 
 
 def post_boot_check():
-    """开机后自检：确认 sing-box 在运行且节点端口在监听，不正常就重启它一次，并把结果记下来给面板显示。"""
+    """开机后自检：确认 sing-box 在运行且节点端口在监听，不正常就重启它一次。"""
     try:
         if float(open("/proc/uptime").read().split()[0]) > 600:
-            return  # 只是面板自己重启，不是开机
+            return
     except OSError:
         return
-    time.sleep(25)  # 等 sb-relay 和网络起来
+    time.sleep(25)
     for attempt in (1, 2):
         state = load_state()
         ib = state["inbounds"]
@@ -600,7 +803,18 @@ def upstream_status(state):
     if not up:
         return {"configured": False}
     ob = up["outbound"]
-    r = {"configured": True, "type": ob["type"], "server": ob["server"], "port": ob["server_port"]}
+    t_label = {
+        "socks": "SOCKS5 静态 ISP",
+        "http": "HTTP 静态 ISP",
+    }.get(ob["type"], ob["type"])
+    r = {
+        "configured": True,
+        "type": t_label,
+        "raw_type": ob["type"],
+        "server": ob["server"],
+        "port": ob["server_port"],
+        "has_auth": bool(ob.get("username")),
+    }
     if ob["type"] in ("hysteria2", "tuic"):
         r["latency"] = None
         r["note"] = "UDP 协议无法用 TCP 测延迟，请用下面的出口测试"
@@ -609,7 +823,7 @@ def upstream_status(state):
     return r
 
 
-UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
+UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
 
 def _opener(proxy_port):
@@ -619,7 +833,7 @@ def _opener(proxy_port):
     return urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
-def _fetch(opener, url, timeout=10):
+def _fetch(opener, url, timeout=12):
     t = time.time()
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept-Language": "en-US,en;q=0.9"})
     try:
@@ -642,12 +856,24 @@ def exit_test(state, via):
     else:
         try:
             j = json.loads(r["body"])
-            out.update(ip=j.get("ip"), country=j.get("country"), org=j.get("org"), city=j.get("city"))
+            out.update(
+                ip=j.get("ip"),
+                country=j.get("country"),
+                region=j.get("region"),
+                city=j.get("city"),
+                org=j.get("org"),
+                timezone=j.get("timezone"),
+            )
         except ValueError:
             out["ip_error"] = "HTTP %s" % r.get("status")
-    g = _fetch(op, "https://gemini.google.com/app")
-    g.pop("body", None)
-    out["gemini"] = g
+    for key, test_url in (
+        ("claude", "https://claude.ai"),
+        ("chatgpt", "https://chatgpt.com"),
+        ("gemini", "https://gemini.google.com/app"),
+    ):
+        res = _fetch(op, test_url)
+        res.pop("body", None)
+        out[key] = res
     return out
 
 
@@ -780,8 +1006,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "server_ip": state["server_ip"],
                 "rules": state["rules"],
                 "presets": preset_status(state),
-                "upstream": {"link_type": up["outbound"]["type"], "server": up["outbound"]["server"],
-                             "port": up["outbound"]["server_port"]} if up else None,
+                "upstream": {
+                    "link_type": up["outbound"]["type"],
+                    "server": up["outbound"]["server"],
+                    "port": up["outbound"]["server_port"],
+                    "username": up["outbound"].get("username", ""),
+                } if up else None,
                 "links": node_links(state),
                 "debug_log": bool(state.get("debug_log")),
                 "ports": {k: state["inbounds"][k]["port"] for k in ("vless", "hy2", "smart", "smart_hy2")},
@@ -835,7 +1065,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     }
                     backup(RULES)
                     save_state(state)
-                    write_rules(state)  # sing-box 会自动重新加载本地规则集，无需重启
+                    write_rules(state)
                 self._send(200, {"ok": True, "rules": state["rules"], "presets": preset_status(state)})
             elif sub == "/api/preset":
                 preset = next((p for p in PRESETS if p["id"] == data.get("id")), None)
@@ -910,7 +1140,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 with lock:
                     state = load_state()
                     state["panel"]["salt"], state["panel"]["password_hash"] = hash_password(new)
-                    state["panel"]["secret"] = secrets.token_hex(32)  # 让旧登录全部失效
+                    state["panel"]["secret"] = secrets.token_hex(32)
                     save_state(state)
                     remove_initial_password()
                 self._send(200, {"ok": True})
@@ -1008,7 +1238,7 @@ def cmd_init():
             "smart_hy2": {"port": pick_port("SMART_HY2_PORT", used), "password": secrets.token_urlsafe(16)},
         },
         "probe": {"b": pick_port("", used), "smart": pick_port("", used)},
-        "rules": {"domain_suffix": [], "domain_keyword": []},  # 默认不分流，需要在面板里手动添加预设
+        "rules": {"domain_suffix": [], "domain_keyword": []},
         "upstream": None,
     }
     self_signed("hy2", "www.bing.com")
@@ -1035,11 +1265,11 @@ def cmd_info():
         print("初始密码: %s  （在面板里改密码后此文件会被删除）" % open(pw_file).read().strip())
     print("\n节点 1  Hysteria2（A 直连）:\n%s" % links["hy2"])
     print("\n节点 2  VLESS-Reality（A 直连）:\n%s" % links["vless"])
-    print("\n节点 3  智能分流 VLESS-Reality（规则内网站走 B，其余 A 直连）:\n%s" % links["smart"])
-    print("\n节点 4  智能分流 Hysteria2（规则内网站走 B，其余 A 直连）:\n%s" % links["smart_hy2"])
+    print("\n节点 3  智能分流 VLESS-Reality（规则内网站走静态 ISP/B，其余 A 直连）:\n%s" % links["smart"])
+    print("\n节点 4  智能分流 Hysteria2（规则内网站走静态 ISP/B，其余 A 直连）:\n%s" % links["smart_hy2"])
     up = state.get("upstream")
-    print("\nB 机出口: %s" % ("%s %s:%s" % (up["outbound"]["type"], up["outbound"]["server"], up["outbound"]["server_port"])
-                           if up else "未设置（请在面板里粘贴 B 机的节点链接）"))
+    print("\n静态 ISP / B 机出口: %s" % ("%s %s:%s" % (up["outbound"]["type"], up["outbound"]["server"], up["outbound"]["server_port"])
+                                      if up else "未设置（请在面板里填写 Proxy-Seller 参数或节点链接）"))
 
 
 ACME = os.path.expanduser("~/.acme.sh/acme.sh")
@@ -1068,7 +1298,7 @@ def cmd_set_domain(domain):
     run([ACME, "--set-default-ca", "--server", "letsencrypt"])
     print("申请证书（需要本机 80 端口可以从外网访问）...")
     code, out = run([ACME, "--issue", "-d", domain, "--standalone", "--keylength", "ec-256"], timeout=300)
-    if code not in (0, 2):  # 2 = 证书已存在且未到续期时间
+    if code not in (0, 2):
         raise SystemExit("申请证书失败:\n" + out[-2000:])
     code, out = run([ACME, "--install-cert", "-d", domain, "--ecc",
                      "--fullchain-file", os.path.join(ETC, "domain.crt"),
